@@ -1,0 +1,282 @@
+<section class="module" id="m1b" data-num="02" data-title="Foundations II — How the Hardware Thinks" data-level="beginner">
+  <h2>Foundations II — How the Hardware Thinks</h2>
+  <p class="lead">Every speed trick in this course comes from one simple habit: <b>do a little arithmetic on the back of an envelope and ask "what is actually slowing this down — the math, or moving the data?"</b> By the end of this module you'll be able to answer that question yourself, and that single skill is most of what a lab pays you for.</p>
+
+  <p>In the last module you learned that the most direct way into a frontier lab is to work at the <em>edges</em> of the stack — and that the edge right below the model is the <span data-term="kernel">kernel</span>: code that makes the model's math run fast on the chip. But to write fast code, you first have to understand what the chip is doing and where it gets stuck. That's this module. We assume you know <strong>nothing</strong> about hardware. We'll build the whole mental model from zero, and it will pay off for the rest of the course.</p>
+
+  <div class="callout key"><p class="co-h">Key idea</p><p>"Thinking like a systems engineer" is not about memorizing chips. It is a <strong>habit of estimation</strong>: count the math, count the bytes you move, and see which one is the bottleneck. The whole module teaches you that one move.</p></div>
+
+  <h3><span class="h3-num">2.1</span> Why a normal computer is too slow</h3>
+
+  <p>Your laptop has a <strong>CPU</strong> — a Central Processing Unit, the "brain" of an ordinary computer. A CPU is a brilliant generalist: it can run your web browser, your music, and your spreadsheet, switching between very different tasks cleverly and quickly. To do that it has a small number of powerful cores — think of a handful of expert professors, each able to solve any problem you hand them, one at a time.</p>
+
+  <p>A large language model does something very different from a spreadsheet. Under the hood it is mostly one operation repeated billions of times: multiply a number, add it to a running total, repeat. The <em>same</em> simple operation, on mountains of <em>different</em> numbers. A handful of brilliant professors is the wrong tool for that. You don't want a few geniuses; you want an army.</p>
+
+  <div class="concept"><p class="c-tag">Concept</p><h4>The accelerator (GPU / TPU)</h4><p>An <span data-term="accelerator">accelerator</span> is a chip built for exactly this army-of-workers job. A <span data-term="gpu">GPU</span> (Graphics Processing Unit) packs <em>thousands</em> of small, simple arithmetic units that all do the same operation on different pieces of data at the same time. That "everyone does the same step at once" pattern is called <strong>massive parallelism</strong>. A <span data-term="tpu">TPU</span> (Tensor Processing Unit) is Google's own version of the same idea, designed from the ground up for neural-network math.</p></div>
+
+  <div class="callout analogy"><p class="co-h">Analogy</p><p>A CPU is four professors solving hard, varied problems one by one. A GPU is a stadium of ten thousand schoolkids, each handed one tiny multiplication. For "do this exact sum on a billion numbers," the stadium wins by a mile. That's why labs run on GPUs and TPUs, not laptops.</p></div>
+
+  <p>GPUs were originally invented to draw video-game graphics — colouring millions of pixels at once is the same "same operation, different data" shape — which is why the name still says "graphics." It turned out the math that paints a screen is the same <em>kind</em> of math that runs a neural network, and the whole AI revolution rode in on that coincidence.</p>
+
+  <h3><span class="h3-num">2.2</span> Counting the work: FLOPs</h3>
+
+  <p>To reason about speed we need a unit for "how much arithmetic." That unit is the <span data-term="flop">FLOP</span> — a <strong>FL</strong>oating-point <strong>OP</strong>eration. One FLOP is one piece of arithmetic on numbers with decimal points: a single multiply, or a single add. ("Floating-point" just means a number that can have a fractional part, like 3.14, as opposed to a whole number.)</p>
+
+  <p>The word does two jobs, and keeping them straight matters:</p>
+  <ul>
+    <li><strong>Total FLOPs</strong> = <em>how much</em> arithmetic a computation needs. A bigger model, or a longer prompt, needs more total FLOPs. This is a property of the <em>job</em>.</li>
+    <li><strong>FLOPs per second</strong> (often written FLOP/s) = <em>how fast</em> a chip can do arithmetic. This is a property of the <em>chip</em>. A big accelerator is rated for trillions of FLOP/s.</li>
+  </ul>
+
+  <p>If arithmetic were the only thing that mattered, predicting runtime would be trivial: <em>time = total FLOPs ÷ FLOPs-per-second</em>, and you'd be done. The whole rest of this module exists because that formula is usually <strong>wrong</strong> — and understanding why is the entire skill.</p>
+
+  <div class="callout note"><p class="co-h">Good to know</p><p>You'll hear "teraFLOP/s" (trillions per second) and "petaFLOP/s" (thousands of trillions). Don't memorize chip numbers — they change every year and quoting a wrong spec in an interview looks worse than admitting you'd look it up. What's permanent is the <em>reasoning</em>, not the digits.</p></div>
+
+  <h3><span class="h3-num">2.3</span> The memory hierarchy — the one mental model to keep</h3>
+
+  <p>Here is the idea that, once it clicks, changes how you see every computation for the rest of your career. The chip can only do arithmetic on numbers that are <em>right next to its math units</em>. But there isn't room next to the math units to hold a whole model. So numbers live in different places, and those places trade <strong>size against speed</strong>.</p>
+
+  <ul>
+    <li><span data-term="sram">SRAM</span> — tiny, <strong>on-chip</strong> memory (this includes the chip's <em>registers</em> and small fast caches). It sits microscopically close to the math units, so reaching it is nearly instant. But it's small: only a sliver of your data fits at a time.</li>
+    <li><span data-term="hbm">HBM</span> — High-Bandwidth Memory, the large <strong>off-chip</strong> pool stacked beside the accelerator. This is where the model's weights and intermediate results actually live. It is <em>much</em> bigger — but reaching it is far slower than reaching SRAM, because the data has to travel.</li>
+  </ul>
+
+  <div class="callout analogy"><p class="co-h">Analogy: the desk and the warehouse</p><p>Picture yourself working at a small <strong>desk</strong> (that's SRAM). Only a few papers fit on it, but anything on the desk you can read and scribble on <em>instantly</em>. Everything else is stored in a giant <strong>warehouse</strong> down the road (that's HBM). The warehouse holds everything — but every time you need a folder that isn't on your desk, you walk there and back, and that trip costs real time. <strong>All the actual work happens on the desk. The warehouse just stores things.</strong></p></div>
+
+  <figure class="figure"><div class="fig-body">
+    <svg class="diagram" viewBox="0 0 720 330" role="img" aria-label="Memory hierarchy shown as a small fast desk (SRAM) on the chip versus a large slow warehouse (HBM) off the chip, connected by a slow round-trip">
+      <defs>
+        <marker id="arwM1bA" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" class="dg-mut" fill="currentColor"/></marker>
+      </defs>
+      <text x="360" y="26" text-anchor="middle" class="dg-title">Where the numbers live: desk vs warehouse</text>
+
+      <!-- The chip boundary -->
+      <rect x="40" y="52" width="300" height="246" rx="14" class="dg-box-accent"/>
+      <text x="190" y="74" text-anchor="middle" class="dg-cyan" style="font-weight:700">THE ACCELERATOR (on-chip)</text>
+
+      <!-- math units -->
+      <rect x="66" y="92" width="248" height="50" rx="9" class="dg-box"/>
+      <text x="190" y="115" text-anchor="middle" class="dg-label" style="font-weight:700">Math units</text>
+      <text x="190" y="132" text-anchor="middle" class="dg-mut">thousands of tiny adders/multipliers</text>
+
+      <!-- SRAM = desk -->
+      <rect x="100" y="166" width="180" height="104" rx="10" class="dg-box-edge glow"/>
+      <text x="190" y="196" text-anchor="middle" class="dg-ember" style="font-weight:700">SRAM</text>
+      <text x="190" y="216" text-anchor="middle" class="dg-mut">= your DESK</text>
+      <text x="190" y="240" text-anchor="middle" class="dg-mut">tiny · instant</text>
+      <text x="190" y="256" text-anchor="middle" class="dg-mut">only a few papers fit</text>
+
+      <!-- HBM = warehouse -->
+      <rect x="452" y="92" width="236" height="178" rx="12" class="dg-box"/>
+      <text x="570" y="124" text-anchor="middle" class="dg-label" style="font-weight:700">HBM</text>
+      <text x="570" y="146" text-anchor="middle" class="dg-mut">= the WAREHOUSE</text>
+      <text x="570" y="176" text-anchor="middle" class="dg-mut">huge · holds everything</text>
+      <text x="570" y="196" text-anchor="middle" class="dg-mut">(all the model's weights)</text>
+      <text x="570" y="224" text-anchor="middle" class="dg-mut">but every trip</text>
+      <text x="570" y="242" text-anchor="middle" class="dg-mut">costs time</text>
+
+      <!-- slow round trip -->
+      <path d="M344 150 H448" class="dg-arrow" marker-end="url(#arwM1bA)"/>
+      <path d="M448 212 H346" class="dg-arrow" marker-end="url(#arwM1bA)"/>
+      <text x="396" y="140" text-anchor="middle" class="dg-mut">fetch →</text>
+      <text x="396" y="206" text-anchor="middle" class="dg-mut">← write back</text>
+      <text x="396" y="296" text-anchor="middle" class="dg-ember" style="font-weight:700">↑ the slow road ↑</text>
+    </svg>
+  </div><figcaption class="fig-cap"><b>Figure 1.</b> Computation only happens on the desk (SRAM, near the math units). Anything not on the desk must be fetched from the warehouse (HBM) and that round-trip — "the slow road" — is what so often decides how fast your program runs.</figcaption></figure>
+
+  <h3><span class="h3-num">2.4</span> Memory bandwidth: how wide the road is</h3>
+
+  <p>How costly is the trip to the warehouse? That's measured by <span data-term="memory-bandwidth">memory bandwidth</span>: <strong>how many bytes per second you can move between HBM and the chip.</strong> (A <em>byte</em> is just a small chunk of data; one decimal number typically takes 2 or 4 bytes to store.) Bandwidth is the width of the road between desk and warehouse — how much you can carry per trip.</p>
+
+  <p>Here is the punch that surprises every beginner: on real accelerators, the math units are so fast and so numerous that they often finish their work and then sit idle, <em>waiting for the next load of data to arrive over that road</em>. The road, not the math, is the limit. As the JAX "scaling book" puts it, a chip rated for hundreds of trillions of operations per second "can just as easily do a tenth of that if it's bogged down moving parameters around in memory."</p>
+
+  <h3><span class="h3-num">2.5</span> The big fork: compute-bound vs memory-bound</h3>
+
+  <p>Every computation, when you run it, is limited by one of two things. Naming which one is the first question a systems engineer asks.</p>
+
+  <div class="tbl-wrap"><table class="data"><caption>The two ways a computation can be stuck</caption>
+    <thead><tr><th>Regime</th><th>What's the bottleneck?</th><th>Desk-and-warehouse picture</th></tr></thead>
+    <tbody>
+      <tr><td><b>Compute-bound</b></td><td>The math units themselves — they're maxed out doing arithmetic.</td><td>Your desk is piled with work; you're scribbling as fast as you can. The road is fine.</td></tr>
+      <tr><td><b>Memory-bound</b></td><td>Moving the data — the chip starves waiting for bytes from HBM.</td><td>You finish each page in a blink, then stand idle waiting for the next folder to arrive from the warehouse.</td></tr>
+    </tbody>
+  </table></div>
+
+  <p>The reason this matters so much in practice: <strong>most of the work in serving an LLM — generating text one token at a time — is surprisingly memory-bound.</strong> To produce each new word, the chip must drag the model's enormous pile of weights out of HBM, do a relatively <em>small</em> amount of math with each weight, and throw it away. The trip dominates; the math is almost an afterthought. The chip spends most of its life waiting on the road, not computing.</p>
+
+  <div class="callout warn"><p class="co-h">Watch out</p><p>Beginners assume "faster chip = faster model," and reach for more FLOP/s. But if your job is memory-bound, buying more math units does <strong>nothing</strong> — the new units just wait on the same road too. You'd need a <em>wider road</em> (more bandwidth) or you'd need to <em>make fewer trips</em>. Knowing which lever to pull is the difference between a real engineer and someone guessing.</p></div>
+
+  <h3><span class="h3-num">2.6</span> Arithmetic intensity: the number that decides it</h3>
+
+  <p>So which regime are you in? There's one ratio that tells you, and learning to estimate it in your head is the heart of this whole module.</p>
+
+  <div class="concept"><p class="c-tag">Concept</p><h4>Arithmetic intensity</h4><p><span data-term="arithmetic-intensity">Arithmetic intensity</span> is <strong>how much math you do per byte you fetch from HBM</strong> — FLOPs done divided by bytes moved. It measures how much useful work you squeeze out of each trip to the warehouse.</p></div>
+
+  <div class="eq">arithmetic intensity = <span class="frac"><span class="fn">FLOPs done</span><span class="fd">bytes moved from HBM</span></span> <span class="eqn-tag">— work squeezed out of each byte you fetch</span></div>
+
+  <p>Read it as a productivity score for every warehouse trip:</p>
+  <ul>
+    <li><strong>High</strong> arithmetic intensity → you do <em>lots</em> of math on each fetched byte → the math units stay busy → you're <strong>compute-bound</strong> (good — the chip is well used).</li>
+    <li><strong>Low</strong> arithmetic intensity → you do <em>little</em> math per fetched byte → the math units idle, hungry for the next load → you're <strong>memory-bound</strong> (the chip is starving).</li>
+  </ul>
+
+  <p>Let's make it concrete with the back-of-the-envelope move Vlad says you should be able to do "in your sleep." Take generating one token, where the core step is multiplying the model's big weight grid by a single vector of numbers.</p>
+
+  <details class="aside"><summary>A worked back-of-envelope: why one-token decoding is memory-bound <span class="aside-tag">do this in your sleep</span></summary>
+  <div class="aside-body">
+    <p>Say a weight grid has <span class="var">N</span> × <span class="var">N</span> = <span class="var">N</span><sup>2</sup> numbers in it. To use them for one token you must:</p>
+    <ul>
+      <li><strong>Move</strong> all <span class="var">N</span><sup>2</sup> weights from HBM. If each number takes 2 bytes (a common choice; <em>illustrative</em>), that's about 2<span class="var">N</span><sup>2</sup> bytes over the road.</li>
+      <li><strong>Compute</strong> with them: each weight gets one multiply and one add, so roughly 2<span class="var">N</span><sup>2</sup> FLOPs.</li>
+    </ul>
+    <p>Now the ratio: arithmetic intensity ≈ 2<span class="var">N</span><sup>2</sup> FLOPs ÷ 2<span class="var">N</span><sup>2</sup> bytes ≈ <strong>1 FLOP per byte</strong>. That is <em>tiny</em>. You fetched every weight just to touch it once. The chip — which can do hundreds of FLOPs in the time it takes to fetch one byte — is starved. So decoding one token at a time is firmly <strong>memory-bound</strong>, and the fix is to do <em>more</em> math per fetched weight (for example, by handling many requests together so each fetched weight serves many of them at once). You just reasoned about real hardware with one line of algebra. That is the skill.</p>
+  </div></details>
+
+  <div class="quiz">
+    <p class="q-tag">Check your understanding</p>
+    <p class="q-text">A computation has <em>low</em> arithmetic intensity — only about 1 FLOP for every byte it pulls from HBM. What is it, and what would actually speed it up?</p>
+    <ul class="q-opts">
+      <li><button class="q-opt" data-correct="false">Compute-bound — add more math units (more FLOP/s).</button></li>
+      <li><button class="q-opt" data-correct="true">Memory-bound — give it more bandwidth, or restructure it to do more math per byte fetched.</button></li>
+      <li><button class="q-opt" data-correct="false">It's perfectly balanced, so nothing can speed it up.</button></li>
+    </ul>
+    <div class="q-explain"><b>Why:</b> Low intensity means the chip does almost no work per fetched byte, so it spends its time waiting on the road from HBM — that's memory-bound. More math units (FLOP/s) wouldn't help; they'd just wait too. The cure is a wider road (bandwidth) or fewer/bigger trips (more work per byte). High intensity is what makes a job compute-bound, not low.</div>
+  </div>
+
+  <h3><span class="h3-num">2.7</span> The roofline model: a picture of the bottleneck</h3>
+
+  <p>Engineers draw all of this in one tidy picture called the <span data-term="roofline">roofline model</span>. It plots how fast your operation can possibly run (up the side: achievable FLOP/s) against its arithmetic intensity (along the bottom). The result looks like the roofline of a house, and where your operation lands on it tells you instantly what's holding it back.</p>
+
+  <figure class="figure"><div class="fig-body">
+    <svg class="diagram" viewBox="0 0 720 360" role="img" aria-label="The roofline model: achievable FLOP per second on the vertical axis against arithmetic intensity on the horizontal axis, showing a slanted memory-bandwidth roof rising to a kink, then a flat peak-compute roof, with a memory-bound point on the slope and a compute-bound point under the flat ceiling">
+      <defs>
+        <marker id="arwM1bB" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" class="dg-mut" fill="currentColor"/></marker>
+      </defs>
+      <text x="360" y="24" text-anchor="middle" class="dg-title">The roofline model</text>
+
+      <!-- axes -->
+      <line x1="80" y1="300" x2="680" y2="300" class="dg-arrow" marker-end="url(#arwM1bB)"/>
+      <line x1="80" y1="300" x2="80" y2="46" class="dg-arrow" marker-end="url(#arwM1bB)"/>
+      <text x="380" y="338" text-anchor="middle" class="dg-mut">arithmetic intensity  (FLOPs per byte)  →</text>
+      <text x="22" y="180" text-anchor="middle" class="dg-mut" transform="rotate(-90 22 180)">achievable speed (FLOP/s)  →</text>
+
+      <!-- the roofline: slanted memory roof up to the kink, then flat compute roof -->
+      <line x1="80" y1="300" x2="360" y2="100" class="dg-edge"/>
+      <line x1="360" y1="100" x2="660" y2="100" class="dg-edge"/>
+
+      <!-- flat compute ceiling reference (dashed) -->
+      <line x1="80" y1="100" x2="360" y2="100" class="dg-dash"/>
+      <text x="150" y="92" class="dg-mut">peak compute (max FLOP/s)</text>
+
+      <!-- the kink / ridge point -->
+      <circle cx="360" cy="100" r="4.5" class="dg-fill" stroke="currentColor"/>
+      <text x="372" y="86" class="dg-cyan">ridge point</text>
+      <line x1="360" y1="100" x2="360" y2="300" class="dg-dash"/>
+      <text x="360" y="316" text-anchor="middle" class="dg-mut">break-even intensity</text>
+
+      <!-- roof labels -->
+      <text x="180" y="206" text-anchor="middle" class="dg-ember" style="font-weight:700">memory-bandwidth roof</text>
+      <text x="180" y="224" text-anchor="middle" class="dg-mut">(slope = bandwidth)</text>
+      <text x="520" y="124" text-anchor="middle" class="dg-ember" style="font-weight:700">peak-compute roof (flat)</text>
+
+      <!-- memory-bound point: on the slope -->
+      <circle cx="200" cy="214" r="6" class="dg-box-edge glow" stroke="currentColor"/>
+      <text x="200" y="252" text-anchor="middle" class="dg-ember" style="font-weight:700">MEMORY-BOUND</text>
+      <text x="200" y="268" text-anchor="middle" class="dg-mut">on the slope: starving</text>
+
+      <!-- compute-bound point: under the flat roof -->
+      <circle cx="540" cy="100" r="6" class="dg-box-accent" stroke="currentColor"/>
+      <text x="540" y="156" text-anchor="middle" class="dg-cyan" style="font-weight:700">COMPUTE-BOUND</text>
+      <text x="540" y="172" text-anchor="middle" class="dg-mut">at the ceiling: full speed</text>
+    </svg>
+  </div><figcaption class="fig-cap"><b>Figure 2.</b> Two roofs meet at a kink (the "ridge point"). Left of it, you're under the <em>slanted</em> roof — speed rises with intensity because you're limited by bandwidth (memory-bound). Right of it, you hit the <em>flat</em> roof — you're running the math units flat-out (compute-bound). Where your operation lands tells you exactly what to fix.</figcaption></figure>
+
+  <p>Read the picture left to right. An operation with <em>low</em> intensity sits on the rising, slanted part — the <strong>memory roof</strong> — and the only way it goes faster is a wider road (more bandwidth) or higher intensity (shoving it rightward). An operation with <em>high</em> intensity bumps into the <strong>flat compute roof</strong> at the top: it's using the chip's full math power, and the only way faster is a faster chip. The corner where the two roofs meet is the sweet spot Reiner Pope calls being "equally memory-bound and compute-bound — a really desirable place to be," because neither resource is wasted.</p>
+
+  <div class="quiz">
+    <p class="q-tag">Check your understanding</p>
+    <p class="q-text">An operation lands on the <em>slanted</em> part of the roofline (the rising line), well to the left of the kink. What does that tell you?</p>
+    <ul class="q-opts">
+      <li><button class="q-opt" data-correct="true">It's memory-bound — limited by bandwidth — so it would speed up with more bandwidth or higher arithmetic intensity.</button></li>
+      <li><button class="q-opt" data-correct="false">It's already at peak compute, so only a faster chip helps.</button></li>
+      <li><button class="q-opt" data-correct="false">It's broken; correct code never lands on the slope.</button></li>
+    </ul>
+    <div class="q-explain"><b>Why:</b> The slanted roof <em>is</em> the bandwidth limit — its height grows with intensity, meaning data movement is the cap. The flat roof on the right is the compute limit. Landing on the slope is completely normal (most LLM decoding does); it just tells you the lever to pull is bandwidth or restructuring, not more FLOP/s.</div>
+  </div>
+
+  <h3><span class="h3-num">2.8</span> What a kernel really is — and the fusion trick</h3>
+
+  <p>Now we can make the word <strong>kernel</strong> physical. In Module 03 you met it as "code that runs one operation fast on the accelerator." Here's the concrete truth: a kernel is the code that, for one operation, <strong>decides what data to haul out of HBM, what to keep on the desk (SRAM), and in what order to do the math</strong> — all to keep those expensive warehouse trips to a minimum. Writing a good kernel <em>is</em> the craft of managing the memory hierarchy you just learned.</p>
+
+  <p>Here's the single most important trick, and a preview of the famous one we study later. Suppose your model does operation A, then operation B, one after another. The lazy way: run A, write its result all the way back to the warehouse (HBM), then read that same result back to the desk to run B. Two pointless trips down the slow road.</p>
+
+  <div class="concept"><p class="c-tag">Concept</p><h4>Fusion</h4><p><span data-term="fusion">Fusion</span> means combining operations into one kernel so the <em>intermediate</em> result never leaves the chip — A hands its output straight to B <strong>on the desk</strong>, skipping the round-trip to HBM. Fewer trips on the slow road means higher arithmetic intensity, which can flip a memory-bound operation toward the good, compute-bound side of the roofline.</p></div>
+
+  <div class="callout note"><p class="co-h">Good to know</p><p>This is the core insight behind <strong>Flash Attention</strong> — the celebrated kernel we'll dissect in Module 05. It computes attention without ever writing the giant intermediate scores out to HBM, by keeping the working data on the desk and fusing the steps. That one idea made long-context models dramatically faster and cheaper. Hold the thought; you now understand <em>why</em> it works.</p></div>
+
+  <p>One more term you'll lean on constantly: the <span data-term="forward-pass">forward pass</span> — running the model <em>forward</em> once, from input to output, to get a prediction (no learning, no weight changes). It's what happens every time the model answers you, and — crucially for the broke outsider — running a forward pass needs only enough hardware to <em>use</em> the model, not to train it. That's why one rented GPU is enough to practice everything in this module.</p>
+
+  <div class="quiz">
+    <p class="q-tag">Check your understanding</p>
+    <p class="q-text">What does fusing two operations into one kernel actually <em>buy</em> you?</p>
+    <ul class="q-opts">
+      <li><button class="q-opt" data-correct="false">It adds more math units to the chip.</button></li>
+      <li><button class="q-opt" data-correct="true">It keeps the intermediate result on-chip (SRAM) instead of round-tripping it to slow HBM, cutting data movement and raising arithmetic intensity.</button></li>
+      <li><button class="q-opt" data-correct="false">It changes the model's answer to a more accurate one.</button></li>
+    </ul>
+    <div class="q-explain"><b>Why:</b> Fusion doesn't change the chip or the math result — it changes <em>where the data lives between steps</em>. By handing the first operation's output straight to the second on the desk, you skip two trips to the warehouse. Fewer bytes moved per FLOP done = higher arithmetic intensity = less memory-bound. That's the whole win, and it's exactly Flash Attention's trick.</div>
+  </div>
+
+  <div class="quiz">
+    <p class="q-tag">Check your understanding</p>
+    <p class="q-text">In the desk-and-warehouse picture, what is HBM?</p>
+    <ul class="q-opts">
+      <li><button class="q-opt" data-correct="false">The desk — tiny and instant, where the math actually happens.</button></li>
+      <li><button class="q-opt" data-correct="true">The warehouse — large, holds all the weights, but every trip to fetch from it costs real time.</button></li>
+      <li><button class="q-opt" data-correct="false">The professors — the powerful general-purpose cores of a CPU.</button></li>
+    </ul>
+    <div class="q-explain"><b>Why:</b> HBM (High-Bandwidth Memory) is the big off-chip warehouse — it stores the model's weights and intermediates, far more than fits on-chip. The desk is SRAM (tiny, instant, on-chip), where computation happens. Confusing the two is the most common beginner slip, and almost every speed trick comes down to making fewer warehouse trips.</div>
+  </div>
+
+  <h3><span class="h3-num">2.9</span> The systems-thinking punchline (and why it gets you hired)</h3>
+
+  <p>Step back and notice what just happened. With nothing but counting — FLOPs here, bytes there — you predicted where a real computation gets stuck and what would fix it. No PhD, no lab, no million-dollar cluster. Reiner Pope describes deriving these insights from "a handful of equations and a blackboard." Vlad puts the same idea even more plainly:</p>
+
+  <blockquote class="callout quote">"the math involved is always simple at the face of it: a little bit of algebra will tell you if your bottleneck is communication, or flops, or memory ... Unless you tell your coding agent to watch out for latch boundedness, it will happily analyze just comms/flops/HBM rooflines ... And whatever the next physical constraint is that didn't get modeled after that."<cite>— Vladimir Feinberg</cite></blockquote>
+
+  <p>Sit with the second half, because it's the real lesson. You now have a model with three knobs — communication, FLOPs, and HBM bandwidth. That model is powerful <em>and</em> incomplete. Real chips have other physical limits your tidy roofline didn't include — Vlad names "latch boundedness," a low-level timing constraint inside the silicon, as one example. The point isn't that you must know that particular limit. The point is that <strong>there is always a next constraint nobody put in the model yet</strong>, and a tool (or a junior engineer) running the standard analysis will sail right past it.</p>
+
+  <div class="callout warn"><p class="co-h">Watch out — the trap that defines the job</p><p>The danger isn't bad arithmetic; it's <strong>trusting a model past its edges</strong>. Your roofline says "compute-bound," you add math units, and nothing gets faster — because the true limit was something the model never represented. The expensive skill is the reflex to ask: <em>"what constraint am I not modeling?"</em> — and then go measure reality to find it.</p></div>
+
+  <div class="callout key"><p class="co-h">Key idea — what labs actually pay for</p><p>Anyone can run the standard roofline. The rare, hireable skill is <strong>lateral systems thinking</strong>: spotting the constraint nobody modeled yet, the bottleneck hiding one level below the obvious one. And here's the gift — you can <em>rehearse</em> that exact skill on a single rented GPU. Profile a real kernel, predict its bottleneck with your back-of-envelope, measure it, and chase down every gap between your prediction and reality. Each gap you explain is a constraint you just learned to see. That practiced instinct is the whole edge.</p></div>
+
+  <p>That is what "think like a systems engineer" means, and why this short module is the bedrock under everything that follows. From here on, every kernel, every speedup, every optimization in this course is just this same loop — estimate, find the bottleneck, find the bottleneck <em>under</em> that — applied again and again. You don't need a lab to start. You need an envelope, a GPU, and the habit.</p>
+
+  <div class="checkpoint"><p class="cp-h">✓ Checkpoint — you should now be able to…</p>
+  <ul>
+    <li>Explain why a GPU/TPU beats a CPU for LLM math (massive parallelism: thousands of units, same operation, different data).</li>
+    <li>Define a FLOP, and keep "total FLOPs" (the job) separate from "FLOP/s" (the chip).</li>
+    <li>Draw the desk-vs-warehouse memory hierarchy and say what SRAM and HBM each are.</li>
+    <li>Decide whether a computation is compute-bound or memory-bound from its arithmetic intensity — and know most LLM decoding is memory-bound.</li>
+    <li>Read a roofline plot: slanted memory roof, flat compute roof, and where a point lands.</li>
+    <li>Say what a kernel does physically, and what fusion buys you (fewer HBM trips → higher intensity).</li>
+    <li>State the systems-thinking punchline: there's always a next unmodelled constraint, and spotting it is the skill labs hire for.</li>
+  </ul></div>
+
+  <script type="application/json" class="glossary-add">
+  {
+    "gpu": {"term":"GPU (Graphics Processing Unit)","short":"A chip with thousands of small units doing the same arithmetic on different data at once — the workhorse of AI.","long":"A GPU is an accelerator that packs thousands of simple arithmetic units running the same operation on different data in parallel (massive parallelism). Built originally for graphics, its math turned out to be ideal for neural networks, making it the standard chip for training and running LLMs.","tag":"hardware"},
+    "tpu": {"term":"TPU (Tensor Processing Unit)","short":"Google's own accelerator chip, custom-built for neural-network math.","long":"A TPU is Google's purpose-built accelerator for the massively parallel math of neural networks. It plays the same role as a GPU in the stack but is designed from the ground up for tensor (matrix) operations.","tag":"hardware"},
+    "flop": {"term":"FLOP","short":"One floating-point operation — a single multiply or add on numbers with decimal points.","long":"A FLOP is one floating-point arithmetic operation (e.g. one multiply or one add). 'Total FLOPs' measures how much arithmetic a computation needs (a property of the job); 'FLOPs per second' measures how fast a chip can do arithmetic (a property of the chip).","tag":"hardware"},
+    "hbm": {"term":"HBM (High-Bandwidth Memory)","short":"The big, relatively slow off-chip memory where a model's weights and intermediates live — the 'warehouse'.","long":"High-Bandwidth Memory is the large pool of memory stacked beside the accelerator. It holds the model's weights and intermediate data. It is far bigger but far slower to reach than on-chip SRAM, so moving data in and out of HBM is often the real bottleneck.","tag":"hardware"},
+    "sram": {"term":"SRAM (on-chip memory)","short":"Tiny, lightning-fast memory right next to the math units — the 'desk' where computation happens.","long":"SRAM is small, very fast memory on the accelerator itself (including registers and caches), sitting microscopically close to the math units. Reaching it is nearly instant, but it holds only a sliver of data, so kernels work hard to keep the most-used data here instead of in slow HBM.","tag":"hardware"},
+    "memory-bandwidth": {"term":"Memory bandwidth","short":"How many bytes per second can move between HBM and the chip — the 'width of the road'.","long":"Memory bandwidth is the rate (bytes per second) at which data can be moved between off-chip HBM and the accelerator. Because math units are so fast, bandwidth is frequently the true limit on how quickly a computation can run.","tag":"hardware"},
+    "compute-bound": {"term":"Compute-bound","short":"Limited by the chip's math units — they're maxed out doing arithmetic.","long":"A computation is compute-bound when the bottleneck is the accelerator's arithmetic units running flat-out. It corresponds to high arithmetic intensity and landing on the flat 'compute roof' of the roofline — the chip is being used well.","tag":"hardware"},
+    "memory-bound": {"term":"Memory-bound","short":"Limited by moving data — the chip starves waiting for bytes from HBM.","long":"A computation is memory-bound when the bottleneck is data movement between HBM and the chip, leaving the math units idle and waiting. It corresponds to low arithmetic intensity and the slanted 'memory roof' of the roofline. Most LLM token-by-token generation is memory-bound.","tag":"hardware"},
+    "arithmetic-intensity": {"term":"Arithmetic intensity","short":"FLOPs done per byte moved from HBM — high means compute-bound, low means memory-bound.","long":"Arithmetic intensity is the ratio of arithmetic performed to bytes fetched from HBM (FLOPs ÷ bytes). High intensity keeps the math units busy (compute-bound, good utilization); low intensity starves them (memory-bound). It is the single number that tells you which regime you're in.","tag":"hardware"},
+    "roofline": {"term":"Roofline model","short":"A plot of achievable speed vs arithmetic intensity, with a slanted memory roof and a flat compute roof.","long":"The roofline model graphs achievable FLOP/s (vertical) against arithmetic intensity (horizontal). A slanted line (the bandwidth limit) rises to a kink, then flattens at peak compute. Where an operation lands reveals whether it is memory-bound (on the slope) or compute-bound (under the flat roof) and what to fix.","tag":"hardware"},
+    "fusion": {"term":"Fusion","short":"Combining operations into one kernel so intermediate results stay on-chip instead of round-tripping to slow HBM.","long":"Fusion merges consecutive operations into a single kernel so an intermediate result is passed directly on-chip (SRAM) to the next step rather than written out to HBM and read back. This cuts data movement, raises arithmetic intensity, and is the core idea behind Flash Attention.","tag":"hardware"},
+    "forward-pass": {"term":"Forward pass","short":"Running a model once from input to output to get a prediction — no learning, no weight changes.","long":"A forward pass is a single run of the model from input to output to produce a result (as opposed to training, which also updates weights). It needs only enough hardware to use the model, not to train it — which is why a single rented GPU is enough to practice kernel work.","tag":"core"}
+  }
+  </script>
+</section>

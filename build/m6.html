@@ -1,0 +1,231 @@
+<section class="module" id="m6" data-num="07" data-title="Agent Work — Above the Stack" data-level="core">
+  <h2>Agent Work — Above the Stack</h2>
+  <p class="lead">Below the model, you make it run fast. Above the model, you make it <em>discover things</em>. <b>This module shows you the upper edge of the stack — and why it's the most wide-open frontier for a newcomer right now.</b></p>
+
+  <p>Back in Module 03 we drew the LLM as a four-floor building. The two glowing floors — the edges — were the places an outsider can actually contribute. We've spent several modules on the floor <em>below</em> the model: kernels, where your job is to make the math run fast on the chip. Now we go to the floor <em>above</em> the model.</p>
+
+  <h3><span class="h3-num">7.1</span> Recap: "above the stack" means agentic loops</h3>
+
+  <p>Above the trained model sit <span data-term="agentic-loop">agentic loops</span>. The stance is simple: you treat the finished model as a <span data-term="grey-box">grey box</span>. You never open it up, never retrain it, never touch a single weight inside it. You just feed it inputs, read its outputs, and wrap clever logic around it — usually in a loop — to get real work done.</p>
+
+  <div class="callout analogy"><p class="co-h">Analogy</p><p>Think of the model as a brilliant but forgetful intern. You can't perform brain surgery on the intern (that's the gatekept "center" of the stack — training). But you <em>can</em> design the perfect workflow around them: what you ask, how you check their answer, what you hand back when they're wrong. The intelligence is fixed; your <strong>scaffolding</strong> is where the value gets added. That scaffolding is agent work.</p></div>
+
+  <p>This is the exact mirror image of kernel work. A kernel makes the model <em>cheaper</em> to run; an agentic loop makes the model <em>more capable</em> at a task than it would be if you just asked it once. Both push the frontier forward. Both can be practiced without ever spending the tens of millions of dollars it takes to train a model. That's why both are edges — and why both are your way in.</p>
+
+  <h3><span class="h3-num">7.2</span> An honest word about this edge</h3>
+
+  <p>Before we go further, a confession — not yours, but the author's. The kernel path has a clean, well-trodden route: there are textbooks, famous open-source projects to copy, and a stopwatch that tells you instantly whether you did well. The agent path does not have that yet. It is genuinely new.</p>
+
+  <blockquote class="callout quote">"The field here is too new for it to have a clean path like in the kernel case. I'll admit I'm not an expert here."<cite>— Vladimir Feinberg</cite></blockquote>
+
+  <p>Read that again, because most people read it backwards. When the author of the playbook says "there's no clean path here and I'm not an expert," a beginner hears <em>"stay away, this is hard."</em> The right reading is the opposite. A field with no well-trodden path is a field where <strong>the trodding hasn't happened yet</strong> — where a careful newcomer can do something that has simply never been done before, and have it noticed precisely because nobody else got there first.</p>
+
+  <div class="callout key"><p class="co-h">Key idea</p><p>"No clean path" is not a warning sign — it's an opening. In kernels you compete against decades of accumulated craft. Above the stack, the ground is still open. The experiments worth running mostly haven't been run. That asymmetry is a gift to anyone willing to be rigorous.</p></div>
+
+  <h3><span class="h3-num">7.3</span> What rigorous agent work IS — and is not</h3>
+
+  <p>Here is where almost everyone goes wrong, so we'll be blunt. "Agent work," in the sense that gets you hired, is <strong>not</strong> the thing you're probably picturing.</p>
+
+  <blockquote class="callout quote">"Before you get too excited, I'm not talking about simply using agents or writing your own CLAUDE.md. I'm talking about setting up rigorous, controlled, technical experiments that assess how single or multiple LLM agents behave."<cite>— Vladimir Feinberg</cite></blockquote>
+
+  <p>Let's unpack the two halves. The first half — "using agents or writing your own CLAUDE.md" — is the everyday stuff. A <code>CLAUDE.md</code> is just a configuration file that tells a coding assistant how you like things done. Tweaking it, or chatting with an agent to build an app, is genuinely useful. But thousands of people do it every day. It is <em>consumption</em>, not <em>research</em>. It demonstrates nothing rare.</p>
+
+  <p>The second half — "rigorous, controlled, technical experiments" — is real science applied to a strange new object: the behaviour of language-model agents. The same discipline a chemist or a physicist uses, pointed at a black-box mind in a loop.</p>
+
+  <div class="callout warn"><p class="co-h">Watch out — the line that separates the two</p><p>Casual agent use says <em>"I built a cool agent and it felt smart."</em> Rigorous agent research says <em>"I had a <strong>hypothesis</strong> (giving the agent a scratchpad will cut its error rate), a <strong>metric</strong> (error rate on 500 held-out tasks), a <strong>control</strong> (the identical agent with no scratchpad), and a <strong>reproducible</strong> setup (anyone can re-run my harness and get the same numbers)."</em> The first is a vibe. The second is evidence. Only the second is a contribution.</p></div>
+
+  <p>Notice the four words in bold above — <strong>hypothesis, metric, control, reproducibility</strong>. They are the whole bar. If your agent project has all four, it is research. If it has none, it is a demo. Let's make each one concrete:</p>
+
+  <ul>
+    <li><strong>Hypothesis</strong> — a specific, falsifiable guess about how the agent will behave. Not "agents are good at coding" but "an agent that runs its own tests before answering will solve more bugs than one that doesn't."</li>
+    <li><strong>Metric</strong> — a single number you can measure automatically, the same way every time. Pass rate. Average steps to solution. Cost in tokens. Without a number you have an opinion, not a result.</li>
+    <li><strong>Control</strong> — the baseline you compare against, identical in every way except the one thing you're testing. This is what turns "it worked" into "it worked <em>because of the change I made</em>."</li>
+    <li><strong>Reproducibility</strong> — someone else can clone your setup and get the same answer. Models are noisy and random, so this means fixing seeds, running many trials, and reporting the spread — not cherry-picking the one run that looked great.</li>
+  </ul>
+
+  <details class="aside"><summary>Why is reproducibility unusually hard with LLM agents? <span class="aside-tag">context</span></summary>
+  <div class="aside-body"><p>Two reasons. First, the model itself is <em>stochastic</em> — ask it the same thing twice and you can get different answers, because it samples from a probability distribution. Second, the same prompt can land differently after a model update on the lab's side. So a single run tells you almost nothing. Serious agent experiments run each condition many times (say 50 or 100) and report the average <em>and</em> the variability, so a fluke can't masquerade as a finding. Treating this noise seriously — rather than pretending it isn't there — is one of the clearest signals that you know what you're doing.</p></div></details>
+
+  <div class="quiz">
+    <p class="q-tag">Check your understanding</p>
+    <p class="q-text">Which of these is "rigorous agent work" in the sense that would impress a frontier lab?</p>
+    <ul class="q-opts">
+      <li><button class="q-opt" data-correct="false">You spent a weekend tuning your CLAUDE.md until your coding assistant felt much more helpful.</button></li>
+      <li><button class="q-opt" data-correct="true">You measured an agent's bug-fix pass rate over 200 tasks, with and without a self-testing step, ran each 50 times, and reported the difference and its spread.</button></li>
+      <li><button class="q-opt" data-correct="false">You used an agent to build a slick demo app and posted a video of it working.</button></li>
+    </ul>
+    <div class="q-explain"><b>Why:</b> Only the middle option has a hypothesis (self-testing helps), a metric (pass rate), a control (the agent without self-testing), and reproducibility (50 runs, reported spread). The other two are consumption and demos — useful, common, but not evidence of a rare skill. The bar here is real science, not vibes.</div>
+  </div>
+
+  <h3><span class="h3-num">7.4</span> Building the scaffolding: autoresearch</h3>
+
+  <p>One of the most powerful ways to contribute above the stack is to <strong>invest in facilitating the model to produce useful outputs</strong> — that is, to build the <em>harness</em>: the surrounding code that lets a grey-box model do real, research-like work on its own. A clean example of this idea is Andrej Karpathy's <span data-term="autoresearch">autoresearch</span> project.</p>
+
+  <p>The concept is striking in its simplicity. You take an ordinary machine-learning training script and let an agent edit it, in a loop, overnight. The harness:</p>
+
+  <ul>
+    <li>Hands the model a piece of training code and asks it to propose an improvement.</li>
+    <li>Runs a <em>short, fixed-budget</em> experiment with the change (in autoresearch, a brief training run).</li>
+    <li>Scores the result automatically on one clear metric (a measure of how well the model predicts its data).</li>
+    <li>Keeps the change if the score improved, discards it if it didn't — then repeats, dozens of times while you sleep.</li>
+  </ul>
+
+  <p>You wake up to a full experimental log: every idea the agent tried, what it scored, what survived. The framing the project reaches toward is that frontier research itself might shift from humans manually turning knobs to <em>autonomous swarms of agents</em> doing the turning, continuously.</p>
+
+  <div class="callout note"><p class="co-h">Good to know</p><p>The deep lesson of autoresearch isn't the specific files — it's the <em>shape</em>. A fixed compute budget per attempt, a single automatic score, and a keep-or-discard rule turn an open-ended "make this better" into a tight, measurable loop a model can run by itself. That shape — <strong>propose, evaluate, select, repeat</strong> — is the engine behind everything in the rest of this module.</p></div>
+
+  <h3><span class="h3-num">7.5</span> The pattern that discovers new things: LLM-in-the-loop search</h3>
+
+  <p>Now we reach the most exciting idea on this edge. Take that "propose, evaluate, select, repeat" shape and wrap it in <strong>evolution</strong>.</p>
+
+  <p>Here's the move. You keep a whole <em>population</em> of candidate solutions, not just one. Each round, the model looks at some of the best survivors and proposes new candidates inspired by them. An automatic evaluator scores every newcomer. The best score gets to survive and "breed" — it seeds the next round; the worst get discarded. Repeat for thousands of rounds. This is <span data-term="evolutionary-search">evolutionary search</span> with a language model as the source of new ideas — what we'll call <span data-term="llm-in-the-loop">LLM-in-the-loop</span> search.</p>
+
+  <div class="concept"><p class="c-tag">Concept</p><h4>LLM-in-the-loop evolutionary search</h4><p>A loop where a language model <em>proposes</em> candidate solutions (often as small programs), an automatic <em>evaluator</em> scores each one, the best candidates <em>survive</em> and seed the next round, and the cycle <em>repeats</em>. The model supplies creativity; the evaluator supplies truth. Over many rounds the population drifts toward genuinely new, high-quality solutions no human wrote.</p></div>
+
+  <p>Why does this work when a single model call often doesn't? Because the two halves cover each other's weaknesses. The model is wildly creative but unreliable — it will happily propose brilliant ideas and nonsense in the same breath. The evaluator is the opposite: it can't invent anything, but it can <em>rigorously test</em> anything and never lies. Put them in a loop and the evaluator filters out the model's mistakes while keeping its leaps. The hallucinations die; the good ideas compound.</p>
+
+  <figure class="figure"><div class="fig-body">
+    <svg class="diagram" viewBox="0 0 720 360" role="img" aria-label="The LLM-in-the-loop evolutionary search cycle: a population seeds the model which proposes candidates, an evaluator scores them, selection keeps the best, and the best loop back into the population">
+      <defs>
+        <marker id="arwM6" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" class="dg-mut" fill="currentColor"/></marker>
+      </defs>
+      <text x="360" y="26" text-anchor="middle" class="dg-title">LLM-in-the-loop evolutionary search</text>
+
+      <!-- population (left) -->
+      <rect x="40" y="150" width="150" height="74" rx="11" class="dg-box-accent"/>
+      <text x="115" y="182" text-anchor="middle" class="dg-cyan" style="font-weight:700">Population</text>
+      <text x="115" y="202" text-anchor="middle" class="dg-mut">pool of best</text>
+      <text x="115" y="216" text-anchor="middle" class="dg-mut">candidates so far</text>
+
+      <!-- propose: the LLM (top, the grey box / emphasis) -->
+      <rect x="270" y="60" width="180" height="74" rx="11" class="dg-box-edge glow"/>
+      <text x="360" y="92" text-anchor="middle" class="dg-ember" style="font-weight:700">1 · Propose</text>
+      <text x="360" y="112" text-anchor="middle" class="dg-mut">LLM (grey box) writes</text>
+      <text x="360" y="126" text-anchor="middle" class="dg-mut">new candidates</text>
+
+      <!-- evaluate (right) -->
+      <rect x="530" y="150" width="150" height="74" rx="11" class="dg-box"/>
+      <text x="605" y="182" text-anchor="middle" class="dg-label" style="font-weight:700">2 · Evaluate</text>
+      <text x="605" y="202" text-anchor="middle" class="dg-mut">automatic scorer</text>
+      <text x="605" y="216" text-anchor="middle" class="dg-mut">tests each one</text>
+
+      <!-- select (bottom) -->
+      <rect x="270" y="262" width="180" height="74" rx="11" class="dg-box"/>
+      <text x="360" y="294" text-anchor="middle" class="dg-label" style="font-weight:700">3 · Select</text>
+      <text x="360" y="314" text-anchor="middle" class="dg-mut">keep the best,</text>
+      <text x="360" y="328" text-anchor="middle" class="dg-mut">discard the rest</text>
+
+      <!-- arrows around the cycle -->
+      <!-- population -> propose -->
+      <path d="M150 152 Q200 95 268 92" class="dg-arrow" fill="none" marker-end="url(#arwM6)"/>
+      <!-- propose -> evaluate -->
+      <path d="M452 100 Q540 110 575 148" class="dg-arrow" fill="none" marker-end="url(#arwM6)"/>
+      <!-- evaluate -> select -->
+      <path d="M572 224 Q500 290 452 298" class="dg-arrow" fill="none" marker-end="url(#arwM6)"/>
+      <!-- select -> population (the "best loop back") -->
+      <path d="M268 300 Q150 295 115 226" class="dg-edge" fill="none" marker-end="url(#arwM6)"/>
+      <text x="150" y="276" class="dg-ember" style="font-weight:700">best loop back ↺</text>
+    </svg>
+  </div><figcaption class="fig-cap"><b>Figure.</b> The cycle. The model (the glowing box) is the only creative step; everything else is automatic. The ember arrow is the heart of it — winners flow back into the population and seed the next, better round.</figcaption></figure>
+
+  <h4>FunSearch</h4>
+
+  <p>The first famous system built exactly this way is <span data-term="funsearch">FunSearch</span> from Google DeepMind. The name is short for "searching for <em>functions</em>" — the candidates it evolves are small pieces of computer code. An LLM proposes programs, an automatic evaluator runs each one and scores it, and the highest-scoring programs go into a shared database for the model to build on next time. The evaluator is the safety rail: because every program is actually <em>run and measured</em>, a hallucinated or broken idea simply scores badly and dies. The creativity is the model's; the truth is the evaluator's.</p>
+
+  <p>What makes FunSearch more than a clever trick is that it found things humans had not. On a long-standing open problem in mathematics (the "cap set" problem, about the largest collection of points in a grid with no three in a line), it produced the biggest improvement in roughly two decades. On the very practical problem of <em>bin packing</em> — fitting items into as few containers as possible, the kind of thing that schedules data centres — it discovered packing strategies that beat the standard textbook ones. New mathematics and a useful everyday algorithm, from the same loop.</p>
+
+  <div class="callout note"><p class="co-h">Good to know — why evolve <em>code</em>, not answers?</p><p>FunSearch evolves short <em>programs</em> rather than raw answers on purpose. A compact program can describe an enormous solution in a few readable lines, so a human can actually inspect <em>why</em> it works and learn from it — instead of being handed a giant black-box blob of numbers. Searching in the space of small programs keeps the discoveries interpretable.</p></div>
+
+  <h4>AlphaEvolve</h4>
+
+  <p>A later, more general system in the same family is <span data-term="alphaevolve">AlphaEvolve</span> — described as an "evolutionary coding agent." It runs the same propose–evaluate–select loop, but orchestrates a whole pipeline of LLMs that improve an algorithm by making direct edits to its code, guided continuously by an evaluator. Where FunSearch evolved a single small function, AlphaEvolve aims to evolve and improve larger, real codebases across many domains.</p>
+
+  <p>Its reported results sit squarely in the "genuinely new" category. Among them: a more efficient scheduling algorithm for data centres, simplifications to hardware-accelerator circuit design, speed-ups to the very process of training models — and, most strikingly, a new procedure for multiplying small matrices that, the paper reports, improved for the first time in over half a century on a classic result (Strassen's algorithm) for one particular case. The takeaway for us is not the exact numbers — verify those against the paper — but the <em>shape</em>: the same LLM-in-the-loop search, pointed at harder targets, kept producing real improvements.</p>
+
+  <blockquote class="callout quote">"I've been working with AlphaEvolve and FunSearch as components of my research workflow, where I integrate LLM search in the inner loop for algorithm development. No, I won't share more here :)"<cite>— Vladimir Feinberg</cite></blockquote>
+
+  <p>Notice what that quote tells you. These aren't museum pieces to admire — a working frontier researcher uses them as <em>building blocks</em>, dropping LLM-in-the-loop search into the innermost part of how he develops new algorithms. The playful refusal to say more is a hint about how alive and competitive this area is. Which is, again, good news: the territory is being actively explored, not closed off.</p>
+
+  <p>Let's make the loop concrete. Module 03 showed a tiny grey-box loop that kept a single idea and improved it. Here we go one step further and add the two things that make it <em>evolutionary</em>: a population, and selection.</p>
+
+  <div class="code-walk">
+    <div class="cw-bar"><span class="cw-dots"><i></i><i></i><i></i></span><span class="cw-name">evolve.py</span><button class="cw-copy">copy</button></div>
+    <pre><code><span class="tok-com"># sketch — the spirit of LLM-in-the-loop evolutionary search.</span>
+<span class="tok-com"># We never touch the model's weights. We wrap a loop around it.</span>
+population = [seed_program]                 <span class="tok-com"># start with one known candidate</span>
+
+<span class="tok-kw">for</span> generation <span class="tok-kw">in</span> <span class="tok-fn">range</span>(<span class="tok-num">1000</span>):
+    parents  = <span class="tok-fn">sample_best</span>(population, k=<span class="tok-num">3</span>)        <span class="tok-com"># pick a few top survivors</span>
+    children = [llm(<span class="tok-str">f"Improve this:\n{p}"</span>) <span class="tok-kw">for</span> p <span class="tok-kw">in</span> parents]  <span class="tok-com"># LLM proposes</span>
+
+    <span class="tok-kw">for</span> child <span class="tok-kw">in</span> children:
+        score = <span class="tok-fn">evaluate</span>(child)               <span class="tok-com"># the automatic, honest scorer</span>
+        <span class="tok-kw">if</span> score <span class="tok-kw">is</span> <span class="tok-kw">not</span> <span class="tok-kw">None</span>:               <span class="tok-com"># broken / hallucinated -&gt; dropped</span>
+            population.<span class="tok-fn">append</span>((child, score))
+
+    population = <span class="tok-fn">keep_top</span>(population, n=<span class="tok-num">50</span>)    <span class="tok-com"># selection: survival of the best</span>
+
+best = <span class="tok-fn">keep_top</span>(population, n=<span class="tok-num">1</span>)            <span class="tok-com"># the discovered solution</span></code></pre>
+    <div class="cw-note">Compare this to Module 03's loop. The new ingredients are <code>population</code> (we hold many candidates, not one), <code>sample_best</code> (creativity is seeded from current winners), and <code>keep_top</code> (selection — the weak are culled each round). The model supplies ideas; <code>evaluate</code> supplies truth and quietly drops anything broken. Run it long enough and the population drifts toward solutions no human typed.</div>
+  </div>
+
+  <div class="quiz">
+    <p class="q-tag">Check your understanding</p>
+    <p class="q-text">In LLM-in-the-loop evolutionary search, what stops the system from being fooled by the model's hallucinated or broken ideas?</p>
+    <ul class="q-opts">
+      <li><button class="q-opt" data-correct="false">The model is retrained after every round so it stops making mistakes.</button></li>
+      <li><button class="q-opt" data-correct="true">Every candidate is actually run and scored by an automatic evaluator, so a wrong or broken idea gets a low score and is discarded.</button></li>
+      <li><button class="q-opt" data-correct="false">A human reads each candidate by hand before it's allowed into the next round.</button></li>
+    </ul>
+    <div class="q-explain"><b>Why:</b> The whole point of the loop is the division of labour: the model is creative but unreliable, and the evaluator is the honest filter that <em>tests</em> every proposal. Nothing survives that doesn't measurably score well — which is exactly why hallucinations can't accumulate. No retraining happens (it's a grey box), and the scoring is automatic, not manual.</div>
+  </div>
+
+  <div class="quiz">
+    <p class="q-tag">Check your understanding</p>
+    <p class="q-text">Why is this upper edge of the stack described as unusually <em>open</em> to a newcomer?</p>
+    <ul class="q-opts">
+      <li><button class="q-opt" data-correct="false">Because it requires no skill — anyone who has chatted with an AI is already an expert.</button></li>
+      <li><button class="q-opt" data-correct="true">Because the field is so new that there's no well-trodden path yet, so a careful, rigorous experiment can do something genuinely new and get noticed.</button></li>
+      <li><button class="q-opt" data-correct="false">Because labs ignore this area entirely, so there's no competition.</button></li>
+    </ul>
+    <div class="q-explain"><b>Why:</b> Even the essay's author says he's "not an expert here" and that there's no clean path like in kernels. That's not a sign the area is unimportant or skill-free — it's a sign the obvious experiments mostly haven't been run yet. Rigour is still required; in fact rigour is the entire edge. The openness is the opportunity, not an excuse to be sloppy.</div>
+  </div>
+
+  <h3><span class="h3-num">7.6</span> How a beginner starts contributing here</h3>
+
+  <p>You don't need a lab, a cluster, or permission. You need a loop and the discipline to measure it honestly. Here's the on-ramp:</p>
+
+  <ol>
+    <li><strong>Pick a narrow, measurable task.</strong> Not "make agents smarter" — something tiny and scoreable. "Solve these 100 small coding puzzles." "Find a short program that beats this baseline on this one benchmark." If you can't write a function that scores an answer, pick a different task.</li>
+    <li><strong>Build a small harness.</strong> A short loop that calls a model, gets a candidate, and passes it to a <em>real</em> evaluator — a unit test, a benchmark script, a stopwatch. The evaluator must be automatic and honest. This is the autoresearch lesson: fixed budget, one clear score, keep-or-discard.</li>
+    <li><strong>Add the population if it fits.</strong> Once the simple loop works, try the evolutionary version: hold several candidates, seed new proposals from the best, cull the weak. Now you're running real LLM-in-the-loop search.</li>
+    <li><strong>Measure like a scientist.</strong> Hypothesis, metric, control, reproducibility. Run each condition many times. Report the average <em>and</em> the spread. Resist the urge to show only your best run.</li>
+    <li><strong>Iterate, then publish.</strong> Improve the harness, write up exactly what you found — including what <em>didn't</em> work — and put the code somewhere public so anyone can re-run it.</li>
+  </ol>
+
+  <div class="callout key"><p class="co-h">Key idea — the hiring tie-back</p><p>A clean, rigorous agent experiment — or a small but genuinely useful open-source harness — is exactly the kind of demonstrable artifact that gets a newcomer pulled into a lab. It proves the rarest thing of all on this edge: that you can do real science on agent behaviour, not just use agents. You don't argue your way past the catch-22; you publish your way past it.</p></div>
+
+  <div class="callout note"><p class="co-h">Good to know</p><p>Because this edge is so new, even a <em>negative</em> result, done rigorously, can be valuable. "I hypothesised X would help; with a proper control over 100 runs, it didn't, and here's the data" is a genuine contribution — and a strong signal that you understand the difference between evidence and a vibe. On a frontier where few clean experiments exist, an honest one stands out.</p></div>
+
+  <div class="checkpoint"><p class="cp-h">✓ Checkpoint — you should now be able to…</p>
+  <ul>
+    <li>Explain "above the stack" as wrapping smart logic around a grey-box model, the mirror image of kernel work.</li>
+    <li>State, in one breath, the four marks of rigorous agent research: hypothesis, metric, control, reproducibility — and why a tuned <code>CLAUDE.md</code> isn't research.</li>
+    <li>Describe the LLM-in-the-loop evolutionary search cycle: propose → evaluate → select → repeat, with winners looping back.</li>
+    <li>Say what FunSearch, AlphaEvolve, and autoresearch each illustrate about that pattern.</li>
+    <li>Sketch a concrete first project: a narrow task, a small harness with a real evaluator, measured honestly.</li>
+  </ul></div>
+
+  <p>That completes the two edges. Below the model you make it fast; above it you make it discover. Both are practiceable from your bedroom, both push the frontier, and both end the same way — with one demonstrable artifact that's loud enough to pull you in.</p>
+
+  <script type="application/json" class="glossary-add">
+  {
+    "agent-research": {"term":"Agent research","short":"Rigorous, controlled experiments measuring how one or more LLM agents behave — not casual agent use.","long":"Agent research means applying real scientific method to language-model agents: forming a hypothesis, defining an automatic metric, comparing against a control, and making results reproducible. It is distinct from everyday agent use (chatting, tweaking config) and is the high-value skill on the top edge of the stack.","tag":"agents"},
+    "evolutionary-search": {"term":"Evolutionary search","short":"A search that keeps a population of candidates, scores them, lets the best survive and seed the next round, and repeats.","long":"Evolutionary search maintains a pool of candidate solutions, evaluates each with an automatic scorer, keeps the highest-scoring ones, and uses them to generate the next generation. Over many rounds the population improves. When the new candidates are proposed by a language model, it becomes LLM-in-the-loop search.","tag":"agents"},
+    "llm-in-the-loop": {"term":"LLM-in-the-loop search","short":"Evolutionary search where a language model proposes candidates and an automatic evaluator scores them, round after round.","long":"A loop in which an LLM supplies creative candidate solutions (often small programs), an automatic evaluator tests and scores each, and the best survive to seed the next round. The model provides creativity; the evaluator provides truth and filters out hallucinations. Repeated many times, it can discover genuinely new, high-quality solutions.","tag":"agents"},
+    "funsearch": {"term":"FunSearch","short":"A DeepMind system that evolves small programs with an LLM plus an automatic evaluator, discovering new math and algorithms.","long":"FunSearch ('searching for functions') pairs a language model that proposes programs with an evaluator that runs and scores them, keeping the best in a shared database to build on. It produced a notable advance on the cap-set problem in mathematics and discovered improved bin-packing algorithms. The evaluator guards against hallucinated or broken ideas.","tag":"agents"},
+    "alphaevolve": {"term":"AlphaEvolve","short":"A later, more general 'evolutionary coding agent' that uses a pipeline of LLMs to improve real code, guided by an evaluator.","long":"AlphaEvolve runs the same propose–evaluate–select loop as FunSearch but orchestrates LLMs that make direct edits to larger codebases across many domains. Reported results include a more efficient data-centre scheduler, accelerator-design simplifications, faster model training, and a new matrix-multiplication procedure. Verify specific figures against the paper.","tag":"agents"},
+    "autoresearch": {"term":"autoresearch","short":"Karpathy's project where an agent edits a training script in a loop overnight, scoring each change automatically.","long":"autoresearch is a harness that lets an AI agent autonomously modify machine-learning training code, run short fixed-budget experiments, score them on a single automatic metric, and keep or discard each change — accumulating a full experimental log without human intervention. It illustrates building scaffolding that lets a grey-box model do research-like work.","tag":"agents"}
+  }
+  </script>
+</section>

@@ -1,0 +1,283 @@
+<section class="module" id="m5" data-num="06" data-title="Kernel Work III — Quantization & Squeezing Memory" data-level="advanced">
+  <h2>Kernel Work III — Quantization &amp; Squeezing Memory</h2>
+  <p class="lead">Frontier models are too big and too slow, and a lot of that pain comes down to one thing: moving giant piles of numbers around. <b>This module hands you a cheap, high-signal way to fight that — quantization — and walks you through the actual research families a lab will recognise.</b></p>
+
+  <p>You've now met the core idea of the whole course: don't attack the gatekept centre of the stack, work the <strong>edges</strong>. You know that an <span data-term="llm">LLM</span> running on a chip is often <span data-term="memory-bound">memory-bound</span> — the math units sit idle waiting for weights to arrive from <span data-term="hbm">HBM</span>, the big slow memory pool. The bottleneck is usually <span data-term="memory-bandwidth">bandwidth</span>: how fast you can ship bytes, not how fast you can multiply them.</p>
+
+  <p>This module is about one of the most beautiful edges in the entire stack — making the numbers <em>smaller</em> so there are fewer bytes to ship. It's called quantization, and it's a near-perfect entry point for an outsider.</p>
+
+  <h3><span class="h3-num">6.1</span> Why quantization is a fantastic edge to enter</h3>
+
+  <p>Let the author say it directly:</p>
+
+  <blockquote class="callout quote">"Quantization is an excellent field to enter as well, which exists at the edges of the LLM stack. It requires minimal resources and exposes you to the full quality-performance tradeoff."<cite>— Vladimir Feinberg</cite></blockquote>
+
+  <p>Unpack that sentence, because every clause is a reason this path is built for you:</p>
+
+  <ul>
+    <li><strong>"At the edges of the LLM stack."</strong> Quantization sits right next to the model, in the same neighbourhood as <span data-term="kernel">kernels</span>. You never have to train a frontier model to do it — you take an <em>already-trained</em> one and shrink it.</li>
+    <li><strong>"Requires minimal resources."</strong> You need enough hardware to run the model <em>once</em> and measure it, not the tens of millions of dollars it takes to train one. A single rented GPU is plenty.</li>
+    <li><strong>"Exposes you to the full quality–performance tradeoff."</strong> This is the gold. Every serious systems problem in AI is a tug-of-war between <em>how good</em> the model is and <em>how fast / cheap / small</em> it is. Quantization puts that exact tension in your hands, in miniature, where you can actually win.</li>
+  </ul>
+
+  <div class="callout key"><p class="co-h">Key idea</p><p>Quantization is a self-contained playground for the one skill labs care about most: walking the <span data-term="quality-performance-tradeoff">quality–performance tradeoff</span> without losing on either side. You can demonstrate that skill alone, in public, for the price of one GPU rental.</p></div>
+
+  <h3><span class="h3-num">6.2</span> What quantization actually is, from zero</h3>
+
+  <p>A neural network is, underneath everything, a colossal collection of numbers — billions of them. These numbers (the model's <em>weights</em>) are normally stored in <span data-term="floating-point">floating-point</span> format using 16 or 32 <span data-term="bit-width">bits</span> each. A bit is a single 0-or-1 switch; the more bits you spend on a number, the more finely you can pin down its exact value.</p>
+
+  <div class="concept"><p class="c-tag">Concept</p><h4>Quantization</h4><p><span data-term="quantization">Quantization</span> means storing those numbers with <em>fewer</em> bits — for example, as 8-bit or 4-bit integers (whole numbers) instead of 16-bit floats. You trade away some precision in each number in exchange for the number taking up less space.</p></div>
+
+  <p>Picture a long ruler covering every weight value the model uses, from its smallest to its largest. A 16-bit float can mark a point almost anywhere on that ruler — it's like a ruler with thousands of tick marks. Quantizing to, say, <span data-term="int8">int8</span> (8-bit integers) is like throwing away most of those tick marks and keeping only a handful of evenly-spaced ones. Every real weight then gets <em>rounded</em> to the nearest surviving tick. You store only "which tick" (a small integer) plus one shared scaling number that tells you how far apart the ticks are.</p>
+
+  <figure class="figure"><div class="fig-body">
+    <svg class="diagram" viewBox="0 0 720 300" role="img" aria-label="A number line of real floating-point weight values being mapped to a few evenly spaced integer levels, with two outlier values far off to the side that ruin the spacing">
+      <defs><marker id="arwM5a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" class="dg-mut" fill="currentColor"/></marker></defs>
+      <text x="360" y="24" text-anchor="middle" class="dg-title">Mapping floats onto a few integer levels</text>
+
+      <!-- The float values: many small dots clustered -->
+      <text x="40" y="70" class="dg-mut">Real weights (16-bit floats):</text>
+      <line x1="60" y1="100" x2="470" y2="100" class="dg-line"/>
+      <circle cx="95" cy="100" r="3.5" class="dg-accent" fill="currentColor"/>
+      <circle cx="130" cy="100" r="3.5" class="dg-accent" fill="currentColor"/>
+      <circle cx="158" cy="100" r="3.5" class="dg-accent" fill="currentColor"/>
+      <circle cx="200" cy="100" r="3.5" class="dg-accent" fill="currentColor"/>
+      <circle cx="232" cy="100" r="3.5" class="dg-accent" fill="currentColor"/>
+      <circle cx="270" cy="100" r="3.5" class="dg-accent" fill="currentColor"/>
+      <circle cx="305" cy="100" r="3.5" class="dg-accent" fill="currentColor"/>
+      <text x="200" y="128" text-anchor="middle" class="dg-mut">most values cluster in a tight range</text>
+
+      <!-- The two outliers, far to the right -->
+      <circle cx="610" cy="100" r="5" class="dg-edge glow" fill="currentColor"/>
+      <circle cx="665" cy="100" r="5" class="dg-edge glow" fill="currentColor"/>
+      <text x="638" y="78" text-anchor="middle" class="dg-ember" style="font-weight:700">outliers!</text>
+      <line x1="470" y1="100" x2="690" y2="100" class="dg-dash"/>
+
+      <!-- The integer levels (ticks) below -->
+      <text x="40" y="200" class="dg-mut">Quantized levels (e.g. int8 ticks):</text>
+      <line x1="60" y1="230" x2="690" y2="230" class="dg-line"/>
+      <line x1="95" y1="222" x2="95" y2="238" class="dg-edge" stroke-width="2"/>
+      <line x1="195" y1="222" x2="195" y2="238" class="dg-edge" stroke-width="2"/>
+      <line x1="295" y1="222" x2="295" y2="238" class="dg-edge" stroke-width="2"/>
+      <line x1="395" y1="222" x2="395" y2="238" class="dg-edge" stroke-width="2"/>
+      <line x1="495" y1="222" x2="495" y2="238" class="dg-edge" stroke-width="2"/>
+      <line x1="595" y1="222" x2="595" y2="238" class="dg-edge" stroke-width="2"/>
+      <line x1="665" y1="222" x2="665" y2="238" class="dg-edge" stroke-width="2"/>
+
+      <!-- arrows: cluster rounds to first few ticks -->
+      <line x1="200" y1="106" x2="160" y2="218" class="dg-arrow" marker-end="url(#arwM5a)"/>
+      <line x1="610" y1="106" x2="612" y2="218" class="dg-arrow" marker-end="url(#arwM5a)"/>
+      <text x="360" y="270" text-anchor="middle" class="dg-mut">to fit the two outliers, the ticks stretch wide — and the cluster collapses onto just 1–2 levels</text>
+    </svg>
+  </div><figcaption class="fig-cap"><b>Figure.</b> Naive quantization spreads its few levels evenly. A couple of huge <span class="dg-ember">outlier</span> values force the spacing so wide that all the normal weights smear onto the same one or two ticks — wrecking their precision. This is the problem LLM.int8() solves.</figcaption></figure>
+
+  <p>Why is this worth doing? Two big wins and one big risk.</p>
+
+  <ul>
+    <li><strong>Win 1 — less memory.</strong> An 8-bit weight is half the size of a 16-bit one; a 4-bit weight is a quarter. A model that didn't fit on your GPU suddenly does.</li>
+    <li><strong>Win 2 — less data to move, so often faster.</strong> Recall the module on bottlenecks: LLM inference is frequently memory-bound, meaning the chip spends most of its time <em>waiting for weights to arrive</em> from HBM. Halve the bytes and you roughly halve that wait. Smaller weights ≈ faster generation, even before any math speedup. (Some hardware also does integer math faster than float math — a bonus on top.)</li>
+    <li><strong>The risk — quality loss.</strong> Round too coarsely and the model gets dumber: it starts making mistakes it never used to. Spend too few bits and the rounding errors pile up until the model is useless.</li>
+  </ul>
+
+  <div class="callout key"><p class="co-h">Key idea</p><p>The entire game of quantization is: <strong>shrink the bits as far as you can while keeping the quality.</strong> Everything below is a different clever trick for pushing that frontier further.</p></div>
+
+  <div class="quiz">
+    <p class="q-tag">Check your understanding</p>
+    <p class="q-text">Why can using fewer bits per weight make inference <em>faster</em>, not just smaller?</p>
+    <ul class="q-opts">
+      <li><button class="q-opt" data-correct="false">Fewer bits means the model has fewer weights to compute, so there's less math overall.</button></li>
+      <li><button class="q-opt" data-correct="true">Inference is often memory-bound — the chip waits on weights arriving from HBM — so moving fewer bytes shortens that wait.</button></li>
+      <li><button class="q-opt" data-correct="false">Fewer bits make the GPU's clock run at a higher frequency.</button></li>
+    </ul>
+    <div class="q-explain"><b>Why:</b> Quantization doesn't remove any weights — the model has exactly as many numbers as before. The speedup comes from <em>bandwidth</em>: a memory-bound model spends most of its time shipping weights from HBM, and smaller weights mean fewer bytes to ship. (Integer math can also be faster, but the memory win is usually the bigger one.)</div>
+  </div>
+
+  <h3><span class="h3-num">6.3</span> LLM.int8() — the classic starting point</h3>
+
+  <p>If you read one quantization paper first, read <a href="https://arxiv.org/abs/2208.07339">LLM.int8()</a>. It's the canonical entry point and it teaches the single most important surprise in the whole area.</p>
+
+  <p>Here's that surprise. When you try to naively quantize a large transformer to 8 bits, it works fine — until the model gets big, and then it suddenly falls apart. The culprit is a tiny number of <span data-term="outlier-features">outlier features</span>: a handful of dimensions inside the model whose values are <em>enormous</em> compared to everything else. Go back to the figure above — those are the two stray dots far off to the right. To fit them on your ruler, you have to stretch the ticks so wide that all the normal, well-behaved weights collapse onto just one or two levels and lose almost all their precision. A few loud voices ruin the recording for everyone.</p>
+
+  <div class="callout analogy"><p class="co-h">Analogy</p><p>Imagine setting one camera exposure for a whole room. If two people are holding blindingly bright flashlights, you'll darken the exposure to avoid blowing them out — and now everyone else in the room is a black silhouette. The fix isn't a better single exposure; it's to photograph the flashlight-holders <em>separately</em>.</p></div>
+
+  <p>That's exactly LLM.int8()'s move. It's a <strong>mixed-precision decomposition</strong>: it identifies the rare outlier dimensions and keeps <em>those</em> in higher-precision 16-bit math, while quantizing all the ordinary weights — well over 99% of them — to int8. It also quantizes in a fine-grained, "vector-wise" way (each chunk gets its own little scaling number) so the normal values keep their detail. You get almost all the memory savings of 8-bit, without the outliers poisoning the result.</p>
+
+  <p>The author frames LLM.int8() not as a single trick but as <strong>"a strong set of tricks for walking the quality–performance tradeoff."</strong> That framing matters: it's a toolbox of ideas — outlier handling, per-vector scaling, mixing precisions — that later work builds on and remixes.</p>
+
+  <div class="quiz">
+    <p class="q-tag">Check your understanding</p>
+    <p class="q-text">What is the key insight behind LLM.int8()?</p>
+    <ul class="q-opts">
+      <li><button class="q-opt" data-correct="false">Every weight in a large model is equally important, so all must be kept in 16-bit.</button></li>
+      <li><button class="q-opt" data-correct="true">A few rare "outlier" dimensions have huge magnitudes that wreck naive 8-bit quantization, so you keep just those in higher precision and quantize the rest to int8.</button></li>
+      <li><button class="q-opt" data-correct="false">8-bit quantization is impossible for transformers, so the paper uses 4-bit instead.</button></li>
+    </ul>
+    <div class="q-explain"><b>Why:</b> The breakthrough is recognising that the damage comes from a <em>tiny</em> set of outlier features, not from 8-bit being too coarse in general. Isolate the outliers into a high-precision path and the remaining 99%+ quantize to int8 cleanly. That's the mixed-precision decomposition.</div>
+  </div>
+
+  <h3><span class="h3-num">6.4</span> The Chris De Sa group series — a progression of ideas</h3>
+
+  <p>One of the best ways to look like an insider is to understand a <em>line</em> of research, not just one paper — to see how each idea answered a limitation in the one before it. The QuIP family, from Chris De Sa's group, is a clean example. Don't memorise the math; follow the story.</p>
+
+  <h4>QuIP — make the weights easier to quantize first</h4>
+
+  <p><a href="https://arxiv.org/abs/2307.13304">QuIP</a> stands for "Quantization with Incoherence Processing." Its insight: instead of quantizing the weights as they are, first <em>transform</em> them into a shape that's friendlier to quantize. Concretely, it multiplies the weights by carefully chosen random rotation matrices. Rotating spreads the values out more evenly and breaks up the nasty structure (like those outliers) that aligns with particular directions — it makes the weights "incoherent." After rotation, no single direction is a problem, so even very coarse quantization hurts less. The rotation is reversible, so the model still computes the same thing. This preprocessing is what first made viable 2-bits-per-weight results possible.</p>
+
+  <div class="callout analogy"><p class="co-h">Analogy</p><p>Before slicing an awkwardly-shaped vegetable, a chef rotates it to a flat, stable face. The vegetable is unchanged — but now every cut is clean and even. QuIP "rotates the weights to a stable face" before the quantizer makes its cuts.</p></div>
+
+  <h4>QuIP# — better codebooks and a polishing step</h4>
+
+  <p><a href="https://arxiv.org/abs/2402.04396">QuIP#</a> keeps the rotate-first idea (using a fast, structured rotation called the randomized Hadamard transform) and improves <em>how</em> the rotated weights are encoded. After rotation, the weights settle into a nice round, ball-shaped cloud. QuIP# quantizes groups of them together using a <span data-term="codebook">codebook</span> — a shared dictionary of allowed values — based on a highly symmetric mathematical lattice (the E₈ lattice, the densest way to pack points in 8 dimensions). Matching the codebook's geometry to the weights' actual shape squeezes more quality out of the same bits. It then adds a <strong>fine-tuning</strong> pass: lightly adjusting the quantized model to claw back any quality lost in rounding.</p>
+
+  <h4>QTIP — trellis coding for even better low-bit quality</h4>
+
+  <p><a href="https://arxiv.org/abs/2406.11235">QTIP</a> attacks a limit of the codebook approach: to handle more dimensions at once, a plain codebook has to grow exponentially huge, which keeps these methods stuck at small chunk sizes. QTIP swaps the lookup-table codebook for <strong>trellis-coded quantization</strong> — a technique borrowed from classic signal compression that uses a small "stateful decoder" instead of a giant table. Because the decoder carries state from one step to the next, it can effectively quantize across many more dimensions <em>without</em> the table blowing up. The payoff is even better quality at very low bit-widths, with a structure designed to stay fast on real hardware.</p>
+
+  <div class="callout note"><p class="co-h">Good to know</p><p>See the arc? QuIP says <em>"reshape the weights first."</em> QuIP# says <em>"now encode them with a smarter, geometry-aware codebook, then fine-tune."</em> QTIP says <em>"replace the codebook with something that scales to more dimensions."</em> Each paper inherits the last one's win and removes its next bottleneck. Narrating an arc like this in an interview signals real taste.</p></div>
+
+  <h3><span class="h3-num">6.5</span> AQLM — a different leaf in the tech tree</h3>
+
+  <p>Not every advance is the next step on one trunk. <a href="https://arxiv.org/abs/2401.06118">AQLM</a> (Additive Quantization of Language Models) is, in the author's phrasing, <em>"a different leaf in the tech tree"</em> — a parallel branch rather than a successor.</p>
+
+  <p>AQLM uses <span data-term="vector-quantization">vector quantization</span> in an <em>additive</em> flavour. Instead of mapping each weight to a single value, it represents a whole <em>group</em> of weights as a <strong>sum of entries pulled from several learned codebooks</strong>. Think of it like describing a colour as "this red + this blue + this touch of yellow": you only store a few small indices (which entry from each codebook), and adding those entries back together reconstructs the group of weights. With a handful of small codebooks combined this way, you can capture surprisingly rich detail in very few bits — enabling the extreme-compression regime of roughly 2–3 bits per weight.</p>
+
+  <div class="callout analogy"><p class="co-h">Analogy</p><p>A paint shop doesn't stock every possible colour. It stocks a few base pigments and <em>mixes</em> them. "Sum of a few codebook entries" is the same trick: a small set of building blocks, combined, can express a vast range of values cheaply.</p></div>
+
+  <p>Now let's pin all of this down in one place, so you can hold the whole landscape in your head:</p>
+
+  <div class="tbl-wrap"><table class="data"><caption>Weight-quantization methods at a glance — the core trick and the bit regime each targets</caption>
+    <thead><tr><th>Method</th><th>Core idea</th><th>Bit-width regime</th></tr></thead>
+    <tbody>
+      <tr><td><b>LLM.int8()</b></td><td>Mixed precision: keep rare high-magnitude <em>outlier</em> dimensions in 16-bit, quantize the rest (99%+) to int8.</td><td>8-bit (with a 16-bit outlier path)</td></tr>
+      <tr><td><b>QuIP</b></td><td><em>Incoherence processing</em>: rotate/precondition the weights so they're evenly spread and easier to quantize.</td><td>Pushes down to ~2-bit</td></tr>
+      <tr><td><b>QuIP#</b></td><td>QuIP + geometry-aware lattice <em>codebooks</em> (E₈) for the rotated weights, plus a fine-tuning pass.</td><td>Very low (~2–4 bit)</td></tr>
+      <tr><td><b>QTIP</b></td><td><em>Trellis-coded</em> quantization: a stateful decoder replaces the big codebook, scaling to more dimensions.</td><td>Very low, improved quality</td></tr>
+      <tr><td><b>AQLM</b></td><td><em>Additive / vector</em> quantization: represent weight groups as a sum of entries from several learned codebooks.</td><td>Extreme (~2–3 bit)</td></tr>
+    </tbody>
+  </table></div>
+
+  <details class="aside"><summary>Optional deep dive: why do these methods reach for rotations and lattices? <span class="aside-tag">advanced</span></summary>
+  <div class="aside-body"><p>The deep reason is statistical. Quantization error is smallest when the values you're rounding are spread evenly and have no special structure for the rounding grid to "miss." Raw transformer weights are the opposite — lumpy, with outliers and correlations. Rotations (QuIP, QuIP#) smooth that lump into a clean, near-spherical cloud, and a lattice or codebook tuned to a sphere then covers it efficiently. AQLM attacks the same problem from the other side: rather than reshaping the cloud to fit a grid, it builds a flexible grid (sums of codebook entries) rich enough to fit the cloud. Different routes, same goal — minimise rounding error at a fixed bit budget. The exact numbers vary by paper and model; the durable lesson is this shape-matching intuition.</p></div></details>
+
+  <h3><span class="h3-num">6.6</span> The decoding side — the KV cache &amp; SnapKV</h3>
+
+  <p>So far we've shrunk the model's <em>weights</em>. But there's a second giant pile of numbers that grows during use, on the <em>decoding</em> (text-generating) side — and it has its own memory-bandwidth problem. To see it, you first need to know what a KV cache is.</p>
+
+  <p>When a model generates text, it produces one token (roughly, one word-piece) at a time, and each new token must "attend to" all the tokens before it. Computing that attention requires, for every past token, two vectors called its <em>Key</em> and its <em>Value</em>. Recomputing the Keys and Values for the entire history at every single step would be wildly wasteful. So the model computes them once and <strong>caches</strong> them.</p>
+
+  <div class="concept"><p class="c-tag">Concept</p><h4>KV cache</h4><p>The <span data-term="kv-cache">KV cache</span> is the model's running memory of the Keys and Values for every token it has already processed. It saves the model from recomputing them at each generation step. But it lives in HBM, and it <em>grows with every token</em> — so a long conversation builds an ever-larger cache the model must read on every step.</p></div>
+
+  <p>And there's the bottleneck. For long contexts, the KV cache becomes enormous, and at each step the model has to <em>read the whole thing</em> back from HBM. That's a pure memory-bandwidth cost — exactly the kind of "waiting for bytes" that dominates memory-bound work. As context grows, reading the KV cache, not doing math, can become the thing that slows generation down. The author points right at this:</p>
+
+  <blockquote class="callout quote">"On the decoding side, you might look at approaches like SnapKV to reduce the KV HBM BW bottleneck."<cite>— Vladimir Feinberg</cite></blockquote>
+
+  <p>("HBM BW" is just shorthand for HBM bandwidth.) <a href="https://arxiv.org/abs/2404.14469">SnapKV</a> shrinks the bottleneck by shrinking the cache. Its insight: attention heads don't spread their attention evenly — each head consistently focuses on a stable, predictable set of important past positions. SnapKV looks at the attention pattern in a small "observation window" at the end of the prompt, uses it to figure out which cached Keys/Values actually matter, and <strong>keeps only those</strong> — discarding the rest. A smaller cache means fewer bytes to read from HBM on every step, which means faster generation and less memory used, with little quality cost.</p>
+
+  <figure class="figure"><div class="fig-body">
+    <svg class="diagram" viewBox="0 0 720 320" role="img" aria-label="The KV cache growing token by token in HBM during generation, then SnapKV pruning it down to only the important entries">
+      <defs><marker id="arwM5b" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" class="dg-mut" fill="currentColor"/></marker></defs>
+      <text x="360" y="24" text-anchor="middle" class="dg-title">The KV cache grows in HBM — SnapKV prunes it</text>
+
+      <!-- HBM container -->
+      <text x="40" y="58" class="dg-mut">In HBM, the KV cache grows every token:</text>
+      <rect x="60" y="70" width="360" height="56" rx="8" class="dg-box"/>
+      <!-- cache cells growing -->
+      <rect x="72" y="82" width="22" height="32" rx="3" class="dg-box-accent"/>
+      <rect x="100" y="82" width="22" height="32" rx="3" class="dg-box-accent"/>
+      <rect x="128" y="82" width="22" height="32" rx="3" class="dg-box-accent"/>
+      <rect x="156" y="82" width="22" height="32" rx="3" class="dg-box-accent"/>
+      <rect x="184" y="82" width="22" height="32" rx="3" class="dg-box-accent"/>
+      <rect x="212" y="82" width="22" height="32" rx="3" class="dg-box-accent"/>
+      <rect x="240" y="82" width="22" height="32" rx="3" class="dg-box-accent"/>
+      <rect x="268" y="82" width="22" height="32" rx="3" class="dg-box-accent"/>
+      <rect x="296" y="82" width="22" height="32" rx="3" class="dg-box-accent"/>
+      <rect x="324" y="82" width="22" height="32" rx="3" class="dg-box-accent"/>
+      <rect x="352" y="82" width="22" height="32" rx="3" class="dg-box-accent"/>
+      <rect x="380" y="82" width="22" height="32" rx="3" class="dg-box-accent"/>
+      <text x="470" y="92" class="dg-mut">every step must</text>
+      <text x="470" y="110" class="dg-mut">re-read all of it →</text>
+      <text x="470" y="128" class="dg-ember" style="font-weight:700">bandwidth bottleneck</text>
+
+      <!-- arrow down -->
+      <line x1="240" y1="150" x2="240" y2="196" class="dg-arrow" marker-end="url(#arwM5b)"/>
+      <text x="256" y="178" class="dg-cyan">SnapKV: keep only the important entries</text>
+
+      <!-- pruned cache -->
+      <text x="40" y="232" class="dg-mut">After SnapKV — far fewer entries to read:</text>
+      <rect x="60" y="244" width="360" height="56" rx="8" class="dg-box"/>
+      <rect x="72" y="256" width="22" height="32" rx="3" class="dg-box-edge glow"/>
+      <rect x="128" y="256" width="22" height="32" rx="3" class="dg-box-edge glow"/>
+      <rect x="240" y="256" width="22" height="32" rx="3" class="dg-box-edge glow"/>
+      <rect x="352" y="256" width="22" height="32" rx="3" class="dg-box-edge glow"/>
+      <text x="470" y="266" class="dg-mut">smaller cache →</text>
+      <text x="470" y="284" class="dg-cyan" style="font-weight:700">fewer bytes, faster</text>
+    </svg>
+  </div><figcaption class="fig-cap"><b>Figure.</b> Top: every generated token adds a Key/Value pair to the cache, and each step must re-read the whole growing cache from HBM. Bottom: SnapKV keeps only the entries that attention actually cares about, shrinking the bytes the model must move.</figcaption></figure>
+
+  <div class="callout note"><p class="co-h">Good to know</p><p>Notice this is the <em>same</em> systems story as weight quantization, just on a different pile of numbers: identify what really matters, spend your scarce bytes there, and stop paying to move the rest. Once you internalise "it's memory-bandwidth all the way down," you start seeing these opportunities everywhere — which is exactly the eye a lab is hiring for.</p></div>
+
+  <div class="quiz">
+    <p class="q-tag">Check your understanding</p>
+    <p class="q-text">What is the KV cache, and why does it become a bottleneck as context grows?</p>
+    <ul class="q-opts">
+      <li><button class="q-opt" data-correct="false">It's a copy of the model's weights kept in SRAM; it bottlenecks because SRAM is tiny.</button></li>
+      <li><button class="q-opt" data-correct="true">It's the stored Keys and Values for all past tokens, kept so they aren't recomputed; it lives in HBM and grows with every token, so re-reading it each step becomes a bandwidth cost.</button></li>
+      <li><button class="q-opt" data-correct="false">It's a list of the model's most common output words, and it slows things down because the list must be sorted every step.</button></li>
+    </ul>
+    <div class="q-explain"><b>Why:</b> The KV cache stores the per-token Keys and Values so the model can attend to history without recomputing it. The catch is that it sits in HBM and grows with the sequence, so for long contexts the model spends more and more time just <em>reading the cache back</em> — a memory-bandwidth bottleneck, which is what SnapKV targets by keeping only the important entries.</div>
+  </div>
+
+  <div class="quiz">
+    <p class="q-tag">Check your understanding</p>
+    <p class="q-text">QuIP, QuIP#, and QTIP form a research progression. What best describes how they build on each other?</p>
+    <ul class="q-opts">
+      <li><button class="q-opt" data-correct="true">QuIP reshapes the weights with rotations so they're easier to quantize; QuIP# adds geometry-aware codebooks plus fine-tuning; QTIP replaces the codebook with trellis coding that scales to more dimensions.</button></li>
+      <li><button class="q-opt" data-correct="false">Each one trains a brand-new frontier model from scratch with progressively more data.</button></li>
+      <li><button class="q-opt" data-correct="false">They are unrelated methods that happen to share a name; none builds on the others.</button></li>
+    </ul>
+    <div class="q-explain"><b>Why:</b> The value is in the arc. QuIP introduces incoherence processing (rotate first). QuIP# improves the encoding step with lattice-based codebooks and a fine-tuning pass. QTIP swaps the codebook for trellis coding to escape the codebook's size limits. Each removes the previous step's main bottleneck — that's what a "progression of ideas" means.</div>
+  </div>
+
+  <h3><span class="h3-num">6.7</span> The most meta example — "Barbarians at the Gate"</h3>
+
+  <p>We'll end on the strangest and most thought-provoking item the author points to. Everything in this module applies a <em>systems-thinking lens</em> — "where's the real bottleneck, and how do I spend my scarce resource wisely?" — to a piece of the LLM stack. The last paper turns that lens around onto the research <em>process itself</em>:</p>
+
+  <blockquote class="callout quote">"The most meta take, assessing systems research itself, is the Barbarians at the Gate paper."<cite>— Vladimir Feinberg</cite></blockquote>
+
+  <p><a href="https://arxiv.org/abs/2510.06189">"Barbarians at the Gate: How AI is Upending Systems Research"</a> asks: if AI is getting good at solving systems problems, what happens to systems research itself? It proposes a framework in which an AI system <em>automatically discovers</em> new algorithms — it generates candidate solutions, then verifies and refines them by actually running them and measuring performance. The paper's argument for why this works so well in systems specifically is itself a systems insight: systems research <em>admits cheap, reliable verification</em>. You can drop a candidate into a real system or a simulator, run a standard workload, and objectively measure whether it's faster or cheaper. That tight, trustworthy feedback loop is precisely what an automated search needs to climb. The authors show case studies across areas like load balancing, inference, database queries, and scheduling, and argue the researcher's job shifts toward <em>formulating problems and steering the search</em> rather than hand-designing each algorithm.</p>
+
+  <div class="callout key"><p class="co-h">Key idea</p><p>This is the systems lens pointed at the top of the stack: the same "find the bottleneck, exploit cheap verification" thinking you used on weights and the KV cache can be applied to <em>how research is done</em>. That stopwatch-fast feedback loop — the very thing that makes kernels and quantization a great entry path for you — is also what lets a machine grind on these problems. Understanding why is a genuinely deep, hireable insight.</p></div>
+
+  <h3><span class="h3-num">6.8</span> The theme, and how this gets you hired</h3>
+
+  <p>Step back and look at the whole module. Weight quantization, KV-cache pruning, and even automated systems research are all the same move at different zoom levels: <strong>find where the system is wasting its scarcest resource, and stop the waste without breaking quality.</strong></p>
+
+  <p>The most important career lesson here is that <strong>the low-hanging fruit is never fully picked.</strong> Every time the field thinks a problem is "solved," someone zooms out, re-examines the whole system, and finds another order-of-magnitude win — LLM.int8() to QuIP to QuIP# to QTIP in just a couple of years, plus an entirely separate AQLM branch, plus a whole second front on the decoding side. New fruit keeps growing because the system keeps changing.</p>
+
+  <div class="callout key"><p class="co-h">Key idea</p><p>Quantization is one of the cheapest, highest-signal ways to build a portfolio that actually gets you hired. It needs one GPU, it gives you a stopwatch for instant feedback, and a clean result — "I shrank model X to N bits with negligible quality loss, here's the code" — is a public artifact that proves you can walk the quality–performance tradeoff. That's the exact skill the labs are expanding into.</p></div>
+
+  <p>So pick a model you can run, pick a bit-width, and reproduce one of these methods end to end. Measure the memory, measure the speed, measure the quality. Then keep zooming out and ask the question this whole module has been training you to ask: <em>where is this system still wasting bytes?</em> Answer it in public, and you've built the most direct evidence a lab could ask for.</p>
+
+  <div class="checkpoint"><p class="cp-h">✓ Checkpoint — you should now be able to…</p>
+  <ul>
+    <li>Explain what quantization is from zero, and why fewer bits usually means faster (memory-bound) inference, not just smaller files.</li>
+    <li>Describe the outlier-feature problem and how LLM.int8()'s mixed-precision decomposition solves it.</li>
+    <li>Narrate the QuIP → QuIP# → QTIP progression — rotate, then better codebooks + fine-tune, then trellis coding — and place AQLM as a separate additive/vector-quantization branch.</li>
+    <li>Say what the KV cache is, why it becomes an HBM-bandwidth bottleneck, and how SnapKV prunes it.</li>
+    <li>Explain why quantization is a cheap, high-signal edge for building a hireable portfolio — and why the low-hanging fruit is never fully picked.</li>
+  </ul></div>
+
+  <script type="application/json" class="glossary-add">
+  {
+    "quantization": {"term":"Quantization","short":"Storing a model's numbers with fewer bits (e.g. 8- or 4-bit integers) instead of 16/32-bit floats.","long":"Quantization reduces the number of bits used to store each weight (or activation) in a model, trading a little numerical precision for big savings in memory and data movement. Done well it shrinks and speeds up a model with negligible quality loss; done badly it degrades the model.","tag":"quantization"},
+    "bit-width": {"term":"Bit-width","short":"How many bits are used to store one number; fewer bits means less memory but coarser precision.","long":"Bit-width is the number of binary digits used to represent a single value. A 16-bit float can express far finer distinctions than a 4-bit integer. Lower bit-width means less storage and bandwidth but more rounding error, which is the central tension in quantization.","tag":"quantization"},
+    "int8": {"term":"int8 (8-bit integer)","short":"A whole number stored in 8 bits — a common, half-size target for quantizing 16-bit weights.","long":"int8 is an 8-bit integer format with 256 possible levels. Quantizing 16-bit weights to int8 halves their memory footprint and the bytes that must move from HBM, which often speeds up memory-bound inference. LLM.int8() is the classic method for doing this on large transformers.","tag":"quantization"},
+    "floating-point": {"term":"Floating-point","short":"The standard way to store real numbers in a model, typically using 16 or 32 bits each.","long":"Floating-point is a number format that represents real values with a sign, a fraction, and an exponent, letting it cover a huge range at fine precision. Model weights are normally stored as 16- or 32-bit floats; quantization replaces these with lower-bit formats like int8 or int4.","tag":"quantization"},
+    "outlier-features": {"term":"Outlier features","short":"A few dimensions in a large transformer whose values are hugely larger than the rest, breaking naive quantization.","long":"Outlier features are rare dimensions inside large transformers that take on very large magnitudes. Because quantization spreads its limited levels to cover the largest values, these outliers force coarse spacing that destroys the precision of ordinary weights. LLM.int8() handles them by keeping the outlier dimensions in higher precision.","tag":"quantization"},
+    "codebook": {"term":"Codebook","short":"A shared dictionary of allowed values that quantized weights are encoded against.","long":"A codebook is a small set of representative values (or vectors); instead of storing a weight directly, you store the index of the nearest codebook entry. Methods like QuIP# design geometry-aware codebooks (e.g. based on the E8 lattice) so the allowed values match the weights' distribution, improving quality at low bit-widths.","tag":"quantization"},
+    "vector-quantization": {"term":"Vector quantization","short":"Quantizing a whole group of numbers together using codebook entries, rather than one number at a time.","long":"Vector quantization encodes groups of weights jointly against a codebook of vectors instead of rounding each weight independently. Additive variants (as in AQLM) represent a group as a sum of entries from several codebooks, capturing rich detail in very few bits and enabling extreme compression.","tag":"quantization"},
+    "kv-cache": {"term":"KV cache","short":"Stored Keys and Values for all past tokens, kept in HBM so the model doesn't recompute them each generation step.","long":"During text generation a transformer caches the Key and Value vectors of every token it has processed so attention doesn't have to recompute them. The cache lives in HBM and grows with the sequence length, so for long contexts re-reading it each step becomes a memory-bandwidth bottleneck — which methods like SnapKV reduce by keeping only the most important entries.","tag":"quantization"},
+    "quality-performance-tradeoff": {"term":"Quality–performance tradeoff","short":"The tension between how good a model is and how fast, cheap, or small it is to run.","long":"Nearly every systems decision in AI trades model quality against performance (speed, memory, cost). Quantization is a clean place to practice walking this tradeoff — shrinking a model as far as possible while preserving its quality — which is exactly the skill frontier labs hire for.","tag":"strategy"}
+  }
+  </script>
+</section>

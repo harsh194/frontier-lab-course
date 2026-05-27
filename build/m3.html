@@ -1,0 +1,238 @@
+<section class="module" id="m3" data-num="04" data-title="Kernel Work I — Systems Thinking & DSLs" data-level="core">
+  <h2>Kernel Work I — Systems Thinking and DSLs</h2>
+  <p class="lead">You already know the edges of the stack are your way in. Now we go down to the most valuable edge of all — the one the author calls the innermost loop of everything. <b>By the end you'll know what "kernel work" really is, how to get good at it on a single rented chip, and why a clever little programming language can be your loudest hire signal.</b></p>
+
+  <p>Last module we drew the LLM stack and found the two edges where an outsider can contribute: <span data-term="kernel">kernels</span> below the model and agentic loops above it. This module zooms in on the lower edge — in the author's words, the most rewarding place to start:</p>
+
+  <blockquote class="callout quote">"The biggest bottleneck and innermost loop of all LLM work is performance work … Every project needs people who can tune the LLMs at the kernel level. It is a skill you can pick up and is the most direct path into the labs."<cite>— Vladimir Feinberg</cite></blockquote>
+
+  <h3><span class="h3-num">4.1</span> What "kernel work" really means</h3>
+
+  <p>When people hear "kernel" they picture one tiny thing: hand-writing a fast matrix-multiply for a GPU. That's part of it, but the author's definition is broader. <span data-term="kernel-work">Kernel work</span> is performance work across three connected faces:</p>
+
+  <ol>
+    <li><strong>Actual device kernel development.</strong> Writing the low-level code that runs one chunk of the model's math directly on the chip — and runs it fast. This is the classic image of the job.</li>
+    <li><strong>Inference-stack innovations and CPU optimizations.</strong> Making the whole machinery that <em>serves</em> a finished model run faster and cheaper — how requests are batched, how data is shuffled around, how the ordinary CPU work surrounding the chip is squeezed.</li>
+    <li><strong>Tooling that supports R&D around this ecosystem.</strong> The profilers, compilers, mini-languages, and libraries that let everyone <em>else</em> do the first two faster. Build the shovel, not just the gold.</li>
+  </ol>
+
+  <p>All three are "performance work," and together they are, in the author's framing, "the biggest bottleneck and innermost loop of all LLM work." Why the innermost loop? Because a model's math runs billions of times. Shave a few percent off it and you save a frontier lab real money on every query, forever. That leverage is exactly why labs hire for it.</p>
+
+  <figure class="figure"><div class="fig-body">
+    <svg class="diagram" viewBox="0 0 720 300" role="img" aria-label="The three faces of kernel work: device kernels, inference-stack and CPU work, and tooling, all sitting on the accelerator">
+      <defs>
+        <marker id="arwM3" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" class="dg-mut" fill="currentColor"/></marker>
+      </defs>
+      <text x="360" y="26" text-anchor="middle" class="dg-title">Three faces of "kernel work"</text>
+
+      <rect x="40" y="58" width="200" height="86" rx="11" class="dg-box-edge glow"/>
+      <text x="140" y="92" text-anchor="middle" class="dg-ember" style="font-weight:700">Device kernels</text>
+      <text x="140" y="112" text-anchor="middle" class="dg-mut">code on the chip,</text>
+      <text x="140" y="128" text-anchor="middle" class="dg-mut">made fast</text>
+
+      <rect x="260" y="58" width="200" height="86" rx="11" class="dg-box-edge glow"/>
+      <text x="360" y="92" text-anchor="middle" class="dg-ember" style="font-weight:700">Inference + CPU</text>
+      <text x="360" y="112" text-anchor="middle" class="dg-mut">serving the model</text>
+      <text x="360" y="128" text-anchor="middle" class="dg-mut">cheaply at scale</text>
+
+      <rect x="480" y="58" width="200" height="86" rx="11" class="dg-box-edge glow"/>
+      <text x="580" y="92" text-anchor="middle" class="dg-ember" style="font-weight:700">Tooling</text>
+      <text x="580" y="112" text-anchor="middle" class="dg-mut">profilers, compilers,</text>
+      <text x="580" y="128" text-anchor="middle" class="dg-mut">DSLs for everyone else</text>
+
+      <rect x="40" y="206" width="640" height="60" rx="11" class="dg-box"/>
+      <text x="360" y="234" text-anchor="middle" class="dg-label" style="font-weight:700">The accelerator (GPU / TPU)</text>
+      <text x="360" y="254" text-anchor="middle" class="dg-mut">all three faces exist to wring speed out of this metal</text>
+
+      <line x1="140" y1="146" x2="140" y2="204" class="dg-arrow" marker-end="url(#arwM3)"/>
+      <line x1="360" y1="146" x2="360" y2="204" class="dg-arrow" marker-end="url(#arwM3)"/>
+      <line x1="580" y1="146" x2="580" y2="204" class="dg-arrow" marker-end="url(#arwM3)"/>
+    </svg>
+  </div><figcaption class="fig-cap"><b>Figure.</b> "Kernel work" is bigger than one box. It is all the performance work that sits on top of the chip — writing kernels, serving models, and building the tools that make both easier.</figcaption></figure>
+
+  <div class="quiz">
+    <p class="q-tag">Check your understanding</p>
+    <p class="q-text">Which of these counts as "kernel work" in the author's broad sense?</p>
+    <ul class="q-opts">
+      <li><button class="q-opt" data-correct="false">Only hand-writing a fast matrix-multiply that runs on the GPU.</button></li>
+      <li><button class="q-opt" data-correct="true">Device kernels, inference-stack and CPU optimizations, and the tooling that supports R&amp;D around all of it.</button></li>
+      <li><button class="q-opt" data-correct="false">Training a frontier model from scratch on a large cluster.</button></li>
+    </ul>
+    <div class="q-explain"><b>Why:</b> Device kernels are just one of three faces. The author groups all <em>performance work</em> — serving/inference, CPU optimization, and the supporting tooling — under the same banner, because they share the same leverage on the inner loop. Training a model from scratch is the gatekept center, not the edge.</div>
+  </div>
+
+  <h3><span class="h3-num">4.2</span> How you get good: you just do it</h3>
+
+  <p>Here is the whole method, stripped down. Plenty of models run slowly on real hardware. Pick one. Make it fast. That's the loop. The author is blunt about it:</p>
+
+  <blockquote class="callout quote">"You just do it. … There are plenty of LLMs out there that run slowly on GPUs and TPUs. Just make them run fast. You only need enough accelerators to run a forward pass … Low level coding isn't the obstacle anymore, it's awareness and integration of details about physical accelerator devices, as well as a scientific approach to spending time where it matters."<cite>— Vladimir Feinberg</cite></blockquote>
+
+  <p>Two things make this practical for someone with no lab and no budget.</p>
+
+  <p><strong>You only need one forward pass.</strong> A <span data-term="forward-pass">forward pass</span> is running the model once — input goes in, an answer comes out — with no training, no learning, no expensive backward step. You don't need a cluster; you need enough hardware to run the model a single time. That's a single rented chip for a few dollars an hour. Speeding up that one pass is the entire game, and it's cheap to play.</p>
+
+  <p><strong>The feedback is instant.</strong> Your benchmark is, almost literally, a stopwatch. Make a change, run the forward pass, read off the time. Faster or slower? You know in seconds — and tight, honest feedback like that is how skill compounds fast.</p>
+
+  <div class="callout analogy"><p class="co-h">Analogy</p><p>It's like timing yourself running one lap of a track. You don't need a stadium or a coach to improve — you need the track (one forward pass) and a stopwatch (the benchmark). Run, tweak your form, run again. The clock never lies, and you get better every lap.</p></div>
+
+  <p>So what <em>is</em> the hard part, if not the coding? The author names it precisely. The obstacle today is <strong>not</strong> writing low-level code — your coding agent is genuinely excellent at that once you've framed the problem clearly. The real obstacles are two:</p>
+
+  <ul>
+    <li><strong>Awareness and integration of physical accelerator details.</strong> Knowing how the actual chip behaves — its memory levels, its bandwidth, its quirks (you met <span data-term="hbm">HBM</span>, <span data-term="sram">SRAM</span>, bandwidth, and the <span data-term="roofline">roofline</span> in Foundations) — and weaving all those facts together into one mental picture of where time is going.</li>
+    <li><strong>A scientific approach to spending time where it matters.</strong> Measuring first, finding the one bottleneck that actually dominates, and fixing <em>that</em> — instead of lovingly optimizing a part that was never slow.</li>
+  </ul>
+
+  <div class="callout key"><p class="co-h">Key idea</p><p>The bottleneck in kernel work has moved. It used to be "can you write the gnarly low-level code?" Now your agent can do that. The new bottleneck — and your new edge — is <strong>knowing the hardware deeply and being scientific about where the time actually goes.</strong></p></div>
+
+  <div class="quiz">
+    <p class="q-tag">Check your understanding</p>
+    <p class="q-text">Why is a single "forward pass" enough hardware to practice kernel work?</p>
+    <ul class="q-opts">
+      <li><button class="q-opt" data-correct="false">Because a forward pass also trains the model a little, so you slowly get a better model for free.</button></li>
+      <li><button class="q-opt" data-correct="true">Kernel work is about making an existing model <em>run</em> fast, so you only need to run it once to benchmark a change — no expensive training required.</button></li>
+      <li><button class="q-opt" data-correct="false">Because forward passes don't use the GPU, so any laptop will do.</button></li>
+    </ul>
+    <div class="q-explain"><b>Why:</b> A forward pass is one run of the model with no learning step — cheap, fast, and all you need to time a speedup. Training (the backward pass, repeated over huge data) is the costly part you're <em>not</em> doing. That asymmetry is what makes this edge practiceable on a single rented chip.</div>
+  </div>
+
+  <h3><span class="h3-num">4.3</span> Why LLMs can't fully do this for you yet</h3>
+
+  <p>If your agent is such a good coder, why isn't this job already automated? It's a fair question, and the answer reveals exactly where <em>your</em> value lives.</p>
+
+  <p>On the surface, the math of performance looks simple — mostly algebra over three quantities: how much the chips can <em>talk</em> to each other (communication), how much arithmetic there is (<span data-term="kernel">FLOPs</span>), and how much data must be moved (memory). The <span data-term="roofline">roofline</span> model you met in Foundations is exactly this kind of back-of-envelope algebra. On a clean, well-posed version of such a question, an agent will out-code you every time.</p>
+
+  <p>But real systems don't live on the back of an envelope. They connect to a messy physical world, and that messiness has two consequences:</p>
+
+  <ul>
+    <li><strong>It rewards lateral thinking and new abstractions.</strong> The win often isn't grinding the obvious equation harder — it's noticing that the problem can be <em>reframed</em>, or inventing a cleaner way to think about it that nobody handed you. That's a human move, not a fill-in-the-blank one.</li>
+    <li><strong>There is always an unmodelled constraint.</strong> The tidy roofline says you're compute-bound, so you optimize compute — and you get nothing, because something the model never accounted for was the real ceiling.</li>
+  </ul>
+
+  <p>A concrete example of that last point: <span data-term="latch-bound">latch boundedness</span>. Sometimes performance is capped not by raw arithmetic or memory bandwidth, but by a low-level hardware mechanism — a latch — that can only admit so many operations per cycle. The naive roofline never modeled the latch, so it confidently points you at the wrong wall. Finding the <em>true</em> wall is the job, and it takes a human who looks past the clean model at the real device.</p>
+
+  <div class="callout warn"><p class="co-h">Watch out</p><p>A passing benchmark on a toy problem can fool you into thinking the model is "fully understood." The skill isn't solving the equation you were given — it's spotting the constraint that <em>wasn't</em> in the equation. That gap is precisely where a human, today, still beats the agent.</p></div>
+
+  <div class="callout note"><p class="co-h">Good to know</p><p>This isn't a knock on coding agents — lean on them hard for the code. It's a <em>division of labour</em>: the agent writes the kernel; you bring the hardware awareness, the lateral leap, and the nose for the hidden bottleneck.</p></div>
+
+  <h3><span class="h3-num">4.4</span> DSLs: little languages that tame the hardware</h3>
+
+  <p>Now we reach the highest-leverage corner of kernel work, and the heart of this module. To understand it, we need one new idea: the <span data-term="dsl">DSL</span>.</p>
+
+  <div class="concept"><p class="c-tag">Concept</p><h4>Domain-Specific Language (DSL)</h4><p>A mini programming language built to do one job extremely well. Instead of a general language that can do anything (like Python), a DSL gives you exactly the words and rules for a single domain — and nothing else — so that domain becomes far easier to express. (A spreadsheet formula language is a DSL for tables; a query language is a DSL for databases.)</p></div>
+
+  <p>Why do kernels, specifically, cry out for their own little languages? Because kernel code is <em>concurrent</em>, and concurrency is brutally hard to get right.</p>
+
+  <div class="concept"><p class="c-tag">Concept</p><h4>Concurrency</h4><p><span data-term="concurrency">Concurrency</span> means many things happening at the same time. A GPU has thousands of tiny workers all running at once. If two of them touch the same data in the wrong order, you get a silent, intermittent bug that's nearly impossible to reproduce. Reasoning about "who does what, when, and in what order" is the central difficulty of low-level chip code.</p></div>
+
+  <p>And here's the catch: to reason about concurrency on a chip, you have to understand the hardware's <span data-term="scheduling">scheduling</span> guarantees — the rules the chip promises about the order in which its thousands of workers run and synchronize. Without those rules, you can't even tell whether your kernel is <em>correct</em>, let alone fast. (For a taste of how subtle this reasoning gets, the author has written about building a synchronization "barrier" purely from low-level primitives called semaphores — a small puzzle that shows how much care correct coordination demands.)</p>
+
+  <p>A good DSL is the rescue. It extracts the <em>right</em> abstractions — the handful of concepts that matter for this hardware — so you can reason about correctness clearly, <strong>without giving up performance.</strong> You write your intent in the little language; the DSL compiles it down to a kernel that is both correct and fast. That combination is the prize, and it's exactly what "working at the edges" looks like at its highest-impact: invent the abstraction everyone else then builds on.</p>
+
+  <figure class="figure"><div class="fig-body">
+    <svg class="diagram" viewBox="0 0 720 250" role="img" aria-label="A DSL as an abstraction layer: your clear intent compiles down to a fast, correct concurrent kernel that runs on the accelerator">
+      <defs>
+        <marker id="arwM3b" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" class="dg-mut" fill="currentColor"/></marker>
+      </defs>
+      <text x="360" y="26" text-anchor="middle" class="dg-title">A DSL as an abstraction layer</text>
+
+      <rect x="40" y="55" width="180" height="80" rx="11" class="dg-box-accent"/>
+      <text x="130" y="88" text-anchor="middle" class="dg-cyan" style="font-weight:700">Your intent</text>
+      <text x="130" y="108" text-anchor="middle" class="dg-mut">clear, in the</text>
+      <text x="130" y="124" text-anchor="middle" class="dg-mut">little language</text>
+
+      <rect x="270" y="55" width="180" height="80" rx="11" class="dg-box-edge glow"/>
+      <text x="360" y="82" text-anchor="middle" class="dg-ember" style="font-weight:700">The DSL</text>
+      <text x="360" y="102" text-anchor="middle" class="dg-mut">compiles to a fast,</text>
+      <text x="360" y="118" text-anchor="middle" class="dg-mut">correct concurrent kernel</text>
+
+      <rect x="500" y="55" width="180" height="80" rx="11" class="dg-box"/>
+      <text x="590" y="88" text-anchor="middle" class="dg-label" style="font-weight:700">Accelerator</text>
+      <text x="590" y="108" text-anchor="middle" class="dg-mut">runs it at</text>
+      <text x="590" y="124" text-anchor="middle" class="dg-mut">full speed</text>
+
+      <line x1="222" y1="95" x2="268" y2="95" class="dg-arrow" marker-end="url(#arwM3b)"/>
+      <line x1="452" y1="95" x2="498" y2="95" class="dg-arrow" marker-end="url(#arwM3b)"/>
+
+      <text x="360" y="180" text-anchor="middle" class="dg-mut">you reason about correctness up here…</text>
+      <text x="360" y="206" text-anchor="middle" class="dg-ember">…without paying for it in speed down there</text>
+    </svg>
+  </div><figcaption class="fig-cap"><b>Figure.</b> A DSL lets you think in clean, high-level terms while still emitting a kernel that runs at full speed — correctness <em>and</em> performance, instead of trading one for the other.</figcaption></figure>
+
+  <div class="quiz">
+    <p class="q-tag">Check your understanding</p>
+    <p class="q-text">Why does a well-designed DSL help with kernel work?</p>
+    <ul class="q-opts">
+      <li><button class="q-opt" data-correct="false">It removes the GPU entirely so concurrency stops mattering.</button></li>
+      <li><button class="q-opt" data-correct="true">It gives you the right abstractions to reason about correctness of concurrent code <em>without</em> sacrificing the performance of the final kernel.</button></li>
+      <li><button class="q-opt" data-correct="false">It makes the code run faster than the hardware's physical limits.</button></li>
+    </ul>
+    <div class="q-explain"><b>Why:</b> Kernels are concurrent and easy to get subtly wrong. A DSL extracts the handful of concepts that matter for the hardware so you can reason clearly — and then compiles down to a kernel that's still fast. It can't beat physics; it removes the <em>human</em> difficulty of writing correct, fast concurrent code.</div>
+  </div>
+
+  <h3><span class="h3-num">4.5</span> ThunderKittens: tiles instead of threads</h3>
+
+  <p>Let's make DSLs concrete with a real example the author calls out: <span data-term="thunderkittens">ThunderKittens</span>, a framework whose paper is cheerfully titled <em>"ThunderKittens: Simple, Fast, and Adorable AI Kernels."</em> The name is a joke; the idea is serious.</p>
+
+  <p><strong>The problem it tackles:</strong> even hand-written, expert kernels often fail to hit the speed the hardware is theoretically capable of — and writing them is painful. ThunderKittens argues that a <em>small</em> set of well-chosen abstractions can recover most of the performance with far less pain.</p>
+
+  <p><strong>The core abstraction is the tile.</strong> Instead of thinking about thousands of individual threads (the standard, mind-bending way), you think in small fixed-size blocks of numbers — for instance 16×16 matrix tiles — and operate on whole tiles at once, with familiar array-style operations. The framework lines its abstractions up with the GPU's own structure across three levels:</p>
+
+  <ul>
+    <li><strong>Warp level:</strong> the 16×16 tile is the basic unit, with PyTorch-like operations over it.</li>
+    <li><strong>Thread-block level:</strong> templates for overlapping slow asynchronous work across groups of workers, so the chip is never idle.</li>
+    <li><strong>Grid level:</strong> help with hiding the costs of launching work and moving memory.</li>
+  </ul>
+
+  <p>The <em>style of thinking</em> is the real lesson: stop reasoning about individual threads and start reasoning about tiles that map naturally onto how the GPU is built. That shift is what makes fast kernels writeable by mortals. It is a textbook DSL/abstraction win — a small, consistent vocabulary that fits the hardware, so diverse operations can be expressed cleanly instead of with ad-hoc tricks each time.</p>
+
+  <div class="callout note"><p class="co-h">Good to know</p><p>We're describing <em>what ThunderKittens does and the way of thinking it promotes</em> — not quoting speedup figures. The takeaway you can carry into any interview is the principle: <strong>pick abstractions that match the hardware's real structure, and performance follows.</strong></p></div>
+
+  <h3><span class="h3-num">4.6</span> CuTe DSL: data layout as a first-class idea</h3>
+
+  <p>A second example, from NVIDIA itself: the <span data-term="cuda">CUDA</span> ecosystem includes a library called <span data-term="cutlass">CUTLASS</span> for high-performance kernels, and within it lives the <strong>CuTe DSL</strong> — a Python domain-specific language for writing those kernels. It centers on one powerful idea.</p>
+
+  <p>In a fast kernel, a huge fraction of the difficulty is not the arithmetic — it's <em>how the data is laid out in memory and how it moves</em> between the chip's slow and fast memory. (Recall from Foundations: reaching big slow <span data-term="hbm">HBM</span> is expensive; staying in small fast <span data-term="sram">SRAM</span> is cheap. Getting layout and movement right is often the whole battle.) CuTe makes <em>data layout itself a first-class thing you can name, describe, and manipulate</em> in the language — rather than something you track painfully in your head while writing thread code.</p>
+
+  <p>When the way your data is shaped and shuffled becomes an explicit object the language understands, you can reason about it directly and let the tooling generate the right low-level moves. Same theme as ThunderKittens, different angle: ThunderKittens gives you the right <em>unit</em> (the tile); CuTe gives you a first-class way to describe <em>layout and movement</em>. Both hand you the right vocabulary for the hard part.</p>
+
+  <div class="callout note"><p class="co-h">Source note</p><p>The detailed CuTe documentation page was mostly a navigation index when this module was written, and the full reference wasn't reachable, so the description above explains the general idea (a Python DSL in CUTLASS for describing data layouts and movement); verify exact APIs and syntax against the official docs.</p></div>
+
+  <h3><span class="h3-num">4.7</span> A curated reading list</h3>
+
+  <p>How do you actually learn this fast? You don't have to invent a curriculum. There is a well-known, curated kernel-study reading list — shared as a tweet by "Yaroslav" — that the community passes around as a starting syllabus for getting good at GPU kernels. From that list, the author specifically calls out ThunderKittens as worth studying, which is why we walked through it above.</p>
+
+  <div class="callout note"><p class="co-h">Source note</p><p>The tweet linking that reading list wasn't reachable when this module was written (the page returned a payment-required error). We therefore describe it only as a <em>curated kernel-study reading list</em> and don't reproduce its specific contents — look it up directly and treat it as a living study guide rather than a fixed canon.</p></div>
+
+  <p>The reasoning these resources build is the concurrency-and-synchronization muscle from §4.4 — the same "who runs when, and is this actually correct?" thinking behind the author's own writing on building a synchronization barrier from semaphores. Expect to spend your study time there, not on syntax.</p>
+
+  <h3><span class="h3-num">4.8</span> Why this is the most direct path into a lab</h3>
+
+  <p>Tie it all back to the goal. Performance work is the inner loop of every LLM project, so labs always need it. The entry cost is a single forward pass on a rented chip. The feedback is a stopwatch. And the payoff signal is unusually loud:</p>
+
+  <div class="callout key"><p class="co-h">Key idea</p><p>One widely-adopted open-source kernel or tool is louder than any résumé. A single artifact that real engineers actually use is undeniable proof you can do the exact work a lab needs — which is why, of all the edges, this is the most direct path in.</p></div>
+
+  <p>You don't have to ask a lab to take a chance on you. You take a slow model, make it fast with your agent and your growing hardware intuition, and ship the result where people can use it — the tile abstraction, the layout helper, the profiler everyone reaches for. That public artifact does the talking. Next module, we get our hands dirty with the concrete hardware details that turn this from a story into a skill.</p>
+
+  <div class="checkpoint"><p class="cp-h">✓ Checkpoint — you should now be able to…</p>
+  <ul>
+    <li>List the three faces of "kernel work" — device kernels, inference/CPU optimization, and supporting tooling — and say why it's the inner loop of all LLM work.</li>
+    <li>Explain how you practice it: make a slow model fast, needing only one forward pass, with a stopwatch for feedback.</li>
+    <li>Name the real obstacles today — hardware awareness and a scientific approach to where time goes — not low-level coding.</li>
+    <li>Say what a DSL is and why a good one lets you reason about concurrent kernels correctly without losing speed.</li>
+    <li>Describe ThunderKittens (tile-based thinking) and the CuTe idea (data layout as first-class) as examples of that win.</li>
+    <li>Explain why one adopted open-source kernel beats a résumé for getting hired.</li>
+  </ul></div>
+
+  <script type="application/json" class="glossary-add">
+  {
+    "kernel-work": {"term":"Kernel work","short":"All performance work on the LLM stack: device kernels, inference/CPU optimization, and the tooling around them.","long":"In the author's broad sense, kernel work spans three faces: writing fast device kernels, optimizing the inference stack and surrounding CPU code, and building the tooling (profilers, compilers, DSLs) that supports R&D. It is the inner loop of all LLM work and the most direct path into a lab.","tag":"strategy"},
+    "dsl": {"term":"DSL (Domain-Specific Language)","short":"A mini programming language built to do one job extremely well, instead of being general-purpose.","long":"A Domain-Specific Language gives you exactly the words and rules for one domain — and nothing else — so problems in that domain become far easier to express. For kernels, a good DSL supplies the right abstractions to reason about correctness without sacrificing performance.","tag":"tooling"},
+    "concurrency": {"term":"Concurrency","short":"Many things happening at the same time — the central difficulty of low-level chip code.","long":"Concurrency means many workers (a GPU has thousands) running at once. If they touch shared data in the wrong order you get silent, intermittent bugs. Reasoning about order and coordination requires understanding the hardware's scheduling guarantees.","tag":"systems"},
+    "cuda": {"term":"CUDA","short":"NVIDIA's platform and language for programming its GPUs.","long":"CUDA is NVIDIA's software platform and programming model for writing code that runs on its GPUs. Most GPU kernel work in the AI world is built on or around the CUDA ecosystem.","tag":"tooling"},
+    "cutlass": {"term":"CUTLASS","short":"NVIDIA's library of building blocks for writing high-performance GPU kernels.","long":"CUTLASS is an NVIDIA library providing components for high-performance kernels (especially matrix operations) on its GPUs. The CuTe DSL lives within CUTLASS as a Python language for describing data layouts and writing fast kernels.","tag":"tooling"},
+    "thunderkittens": {"term":"ThunderKittens","short":"A framework that makes fast GPU kernels easier to write using a small set of tile-based abstractions.","long":"ThunderKittens (paper: 'Simple, Fast, and Adorable AI Kernels') offers a small set of abstractions aligned to GPU structure — notably 16×16 matrix tiles at the warp level, plus thread-block and grid-level templates — so you reason in tiles instead of individual threads while still getting high performance.","tag":"tooling"},
+    "latch-bound": {"term":"Latch-bound","short":"When performance is capped by a low-level hardware mechanism (a latch), not by raw compute or memory.","long":"A workload is latch-bound when the true ceiling on its speed is a hardware latch that only admits so many operations per cycle — a constraint a naive roofline model never accounted for. It is a classic example of the unmodelled real-world constraint that makes systems work require human insight.","tag":"hardware"},
+    "scheduling": {"term":"Scheduling (guarantees)","short":"The rules a chip promises about the order in which its many workers run and synchronize.","long":"Hardware scheduling guarantees are the rules a GPU/TPU makes about how and when its thousands of concurrent workers execute and coordinate. You must understand them to reason about whether concurrent kernel code is even correct, let alone fast.","tag":"systems"}
+  }
+  </script>
+</section>

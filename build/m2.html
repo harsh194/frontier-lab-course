@@ -1,0 +1,151 @@
+<section class="module" id="m2" data-num="03" data-title="The Stack & Why the Edges Win" data-level="core">
+  <h2>The Stack, and Why the Edges Win</h2>
+  <p class="lead">Here is the trap everyone hits: labs hire people who already have rare skills, but the skills seem to need a lab to learn. <b>This module shows you the way out of that trap</b> — and it is the single most important idea in the whole course.</p>
+
+  <p>Imagine you want to work at a frontier lab — a place like OpenAI, Anthropic, or Google DeepMind that builds the most capable AI models in the world. You quickly run into a chicken-and-egg problem:</p>
+
+  <blockquote class="callout quote">"It seems like a catch-22: how do you get these skills and problems without already being there?"<cite>— Vladimir Feinberg</cite></blockquote>
+
+  <p>You can't get hired to train frontier models without experience training frontier models. And you can't get that experience without first being hired, because training a frontier model costs tens of millions of dollars in computer hardware that no student or hobbyist can touch. So how does anyone break in from the outside?</p>
+
+  <p>The answer is to stop trying to attack the center, and instead work at the <strong>edges</strong>.</p>
+
+  <h3><span class="h3-num">3.1</span> The LLM stack: four layers</h3>
+
+  <p>To see where the edges are, picture how a large language model actually runs as a stack of layers, like floors in a building. Each layer sits on top of the one below it and depends on it.</p>
+
+  <div class="concept"><p class="c-tag">Concept</p><h4>The LLM stack</h4><p>The chain of layers that turns physical computer chips into a useful AI assistant. From bottom to top: the <span data-term="accelerator">accelerators</span> (the chips), the <span data-term="kernel">kernels</span> (code that drives the chips), the <span data-term="llm">LLM</span> itself (the trained model), and the <span data-term="agentic-loop">agentic loops</span> (programs that put the model to work). A frontier lab's core business is that middle "LLM" layer — but it grows outward by expanding the layers around it.</p></div>
+
+  <figure class="figure"><div class="fig-body">
+    <svg class="diagram" viewBox="0 0 720 430" role="img" aria-label="The four-layer LLM stack with the kernel and agent layers highlighted as the edges">
+      <defs>
+        <marker id="arwM2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" class="dg-mut" fill="currentColor"/></marker>
+      </defs>
+      <text x="250" y="26" text-anchor="middle" class="dg-title">The LLM stack</text>
+
+      <!-- top: agents (edge) -->
+      <rect x="70" y="50" width="360" height="64" rx="11" class="dg-box-edge glow"/>
+      <text x="250" y="78" text-anchor="middle" class="dg-ember" style="font-weight:700">Agentic loops</text>
+      <text x="250" y="98" text-anchor="middle" class="dg-mut">ABOVE the model — programs that USE the LLM</text>
+
+      <!-- LLM core -->
+      <rect x="70" y="130" width="360" height="78" rx="11" class="dg-box"/>
+      <text x="250" y="162" text-anchor="middle" class="dg-label" style="font-weight:700">The LLM itself</text>
+      <text x="250" y="184" text-anchor="middle" class="dg-mut">the trained model — costs $tens of millions, gatekept</text>
+
+      <!-- kernels (edge) -->
+      <rect x="70" y="224" width="360" height="64" rx="11" class="dg-box-edge glow"/>
+      <text x="250" y="252" text-anchor="middle" class="dg-ember" style="font-weight:700">Kernels</text>
+      <text x="250" y="272" text-anchor="middle" class="dg-mut">BELOW the model — code that MAKES it run fast</text>
+
+      <!-- accelerators -->
+      <rect x="70" y="304" width="360" height="64" rx="11" class="dg-box"/>
+      <text x="250" y="332" text-anchor="middle" class="dg-label" style="font-weight:700">Accelerators (GPU / TPU)</text>
+      <text x="250" y="352" text-anchor="middle" class="dg-mut">the physical chips — the metal</text>
+
+      <!-- annotations -->
+      <line x1="540" y1="82" x2="436" y2="82" class="dg-arrow" marker-end="url(#arwM2)"/>
+      <line x1="540" y1="256" x2="436" y2="256" class="dg-arrow" marker-end="url(#arwM2)"/>
+      <rect x="540" y="120" width="150" height="2" class="dg-fill" opacity="0"/>
+      <text x="548" y="70" class="dg-ember" style="font-weight:700">YOU can work</text>
+      <text x="548" y="88" class="dg-ember" style="font-weight:700">here →</text>
+      <text x="548" y="244" class="dg-ember" style="font-weight:700">…and here →</text>
+      <text x="548" y="262" class="dg-mut">cheap. open. high-impact.</text>
+
+      <line x1="540" y1="169" x2="436" y2="169" class="dg-dash" marker-end="url(#arwM2)"/>
+      <text x="548" y="160" class="dg-mut">needs a lab</text>
+      <text x="548" y="178" class="dg-mut">+ huge $$$</text>
+    </svg>
+  </div><figcaption class="fig-cap"><b>Figure.</b> The two glowing layers — kernels and agents — are "the edges." They are essential to a lab's business but, crucially, <b>you can practice them without ever training a frontier model.</b></figcaption></figure>
+
+  <p>Look at the figure. The middle layer — actually training the giant model — is locked behind enormous cost. That is the part you cannot practice from your bedroom. But the layers <em>touching</em> it are a different story.</p>
+
+  <h3><span class="h3-num">3.2</span> Below the model: kernels</h3>
+
+  <p>Underneath the LLM sit <span data-term="kernel">kernels</span>. A kernel is a small, carefully written piece of code that performs one chunk of the model's math on the chip — and performs it <em>fast</em>. The model is just a huge pile of math; kernels are what make that math actually run at a practical speed on real hardware.</p>
+
+  <div class="callout analogy"><p class="co-h">Analogy</p><p>If the LLM is a recipe, the kernel is the chef's knife technique. The recipe (the math) can be written by anyone, but a master's knife skills are what get dinner out before midnight. Labs are <em>desperate</em> for people with great "knife skills."</p></div>
+
+  <p>Here is the beautiful part: to practice kernel work, you only need enough hardware to run the model <em>once</em> (a "forward pass"), not to train it. That's cheap — a single rented GPU. And you get instant feedback, because "did it get faster?" is just a stopwatch. We devote three whole modules to this path because it is, in the author's words, <strong>"the most direct path into the labs."</strong></p>
+
+  <h3><span class="h3-num">3.3</span> Above the model: agentic loops</h3>
+
+  <p>On top of the LLM sit <span data-term="agentic-loop">agentic loops</span>. The idea: treat the finished model as a <span data-term="grey-box">grey box</span> — you don't open it up or retrain it, you just feed it inputs and use its outputs cleverly, often in a loop, to get useful work done.</p>
+
+  <div class="code-walk">
+    <div class="cw-bar"><span class="cw-dots"><i></i><i></i><i></i></span><span class="cw-name">grey_box_loop.py</span><button class="cw-copy">copy</button></div>
+    <pre><code><span class="tok-com"># "Above the stack": we never touch the model's internals.</span>
+<span class="tok-com"># We just call it, check the result, and loop. That's an agentic loop.</span>
+idea = <span class="tok-str">"a faster sorting method"</span>
+<span class="tok-kw">for</span> step <span class="tok-kw">in</span> <span class="tok-fn">range</span>(<span class="tok-num">100</span>):
+    candidate = llm(<span class="tok-str">f"Improve this idea: {idea}"</span>)   <span class="tok-com"># call the grey box</span>
+    score     = <span class="tok-fn">evaluate</span>(candidate)                  <span class="tok-com"># test it in the real world</span>
+    <span class="tok-kw">if</span> score &gt; <span class="tok-fn">evaluate</span>(idea):
+        idea = candidate                          <span class="tok-com"># keep what works, repeat</span></code></pre>
+    <div class="cw-note">This tiny loop is the whole spirit of "agent work": the model is a black-box engine, and your skill is in the scaffolding around it — how you prompt, score, and iterate. Real research here is rigorous and measured, not just "vibes." We'll go deep in Module 07.</div>
+  </div>
+
+  <div class="callout warn"><p class="co-h">Watch out</p><p>"Agent work" here does <strong>not</strong> mean casually using ChatGPT or writing a config file. It means running careful, controlled experiments on how one or many models behave. The bar is real science.</p></div>
+
+  <h3><span class="h3-num">3.4</span> Why the edges are your way in</h3>
+
+  <p>Frontier labs naturally <em>grow</em> into these neighbouring layers, because a better kernel makes every product cheaper and a better agent loop makes the model more useful. So the edges are where the labs expand their hiring — and they are exactly the areas that <strong>don't require training an LLM, yet still push the frontier forward.</strong></p>
+
+  <div class="callout key"><p class="co-h">Key idea</p><p>The way out of the catch-22 is to <strong>demonstrate one specific, valuable skill the lab needs</strong> — built at the edges of the stack, where the entry cost is low but the impact is high. You don't sneak into the center. You become so good at an edge that they pull you in.</p></div>
+
+  <div class="tbl-wrap"><table class="data"><caption>Two ways to approach a frontier lab</caption>
+    <thead><tr><th>Path</th><th>What it costs you</th><th>Can you practice it alone?</th></tr></thead>
+    <tbody>
+      <tr><td><b>Attack the center</b><br><span class="dg-mut">train a frontier model</span></td><td>$10M+ of compute, a team, lab access</td><td>No — gatekept</td></tr>
+      <tr><td><b>Work the edges</b><br><span class="dg-mut">kernels &amp; agent research</span></td><td>One rented GPU, your time, grit</td><td><b>Yes</b> — and that's the whole point</td></tr>
+    </tbody>
+  </table></div>
+
+  <details class="aside"><summary>Why does the lab even care about an outsider's kernel? <span class="aside-tag">context</span></summary>
+  <div class="aside-body"><p>Because a single well-known speedup, shared as an open-source project, can save a lab millions of dollars in running costs and get adopted across the whole industry. That public artifact is louder than any résumé — it's proof you can do the exact work they need. Several famous lab hires started as exactly this kind of outside contribution.</p></div></details>
+
+  <div class="quiz">
+    <p class="q-tag">Check your understanding</p>
+    <p class="q-text">Why can a student realistically practice "kernel work" but not "training a frontier model"?</p>
+    <ul class="q-opts">
+      <li><button class="q-opt" data-correct="false">Kernel work doesn't use GPUs at all, so it's free.</button></li>
+      <li><button class="q-opt" data-correct="true">Kernel work only needs enough hardware to run the model once and gives instant speed feedback, while training needs tens of millions of dollars of compute.</button></li>
+      <li><button class="q-opt" data-correct="false">Training a model is actually easier, students just don't know how.</button></li>
+    </ul>
+    <div class="q-explain"><b>Why:</b> Kernels are about making an <em>existing</em> model run fast — you only need a single forward pass to test, and the benchmark gives feedback in seconds. Training a frontier model from scratch is the gatekept, capital-intensive part. That asymmetry is exactly why the edges are the way in.</div>
+  </div>
+
+  <div class="quiz">
+    <p class="q-tag">Check your understanding</p>
+    <p class="q-text">What does it mean to use an LLM as a "grey box" in an agentic loop?</p>
+    <ul class="q-opts">
+      <li><button class="q-opt" data-correct="true">You don't modify or retrain the model — you feed it inputs and use its outputs cleverly, often iterating in a loop.</button></li>
+      <li><button class="q-opt" data-correct="false">You rewrite the model's internal weights by hand each step.</button></li>
+      <li><button class="q-opt" data-correct="false">You only use models whose source code is fully public.</button></li>
+    </ul>
+    <div class="q-explain"><b>Why:</b> "Grey box" means you treat the trained model as a fixed engine — you work <em>around</em> it (prompts, scoring, looping), not <em>inside</em> it. That's why agent work sits "above" the model in the stack and doesn't require the resources to train one.</div>
+  </div>
+
+  <div class="checkpoint"><p class="cp-h">✓ Checkpoint — you should now be able to…</p>
+  <ul>
+    <li>Draw the four-layer LLM stack from memory and point to the two "edges."</li>
+    <li>Explain the catch-22 of lab hiring and the way out of it in one breath.</li>
+    <li>Say why kernels (below) and agentic loops (above) are practiceable without a lab's budget.</li>
+    <li>Recognise that your goal is to build <em>one</em> demonstrable, valuable edge skill.</li>
+  </ul></div>
+
+  <p>The rest of this course is simply that plan, made concrete. First we'll build the foundations you need (you've met some of these terms already — next we'll really understand them), then we go deep on each edge. Onward.</p>
+
+  <script type="application/json" class="glossary-add">
+  {
+    "llm": {"term":"LLM (Large Language Model)","short":"A very large AI model trained to predict text, like the engine behind ChatGPT or Claude.","long":"A Large Language Model is a neural network trained on enormous amounts of text to predict the next piece of text. After training it can answer questions, write code, and more. Training one from scratch is extremely expensive; that's the 'center' of the stack.","tag":"core"},
+    "llm-stack": {"term":"The LLM stack","short":"The layers that turn raw chips into a useful AI: accelerators → kernels → the LLM → agentic loops.","long":"A mental model of how an AI assistant runs as stacked layers. From bottom to top: the accelerators (chips), the kernels (code driving the chips), the LLM (the trained model), and agentic loops (programs using the model). Labs expand outward into the edge layers.","tag":"core"},
+    "the-edges": {"term":"The edges (of the stack)","short":"The layers just below and just above the LLM — kernels and agentic loops — where outsiders can contribute.","long":"The two layers neighbouring the model: kernels below and agentic loops above. They are essential to a lab's business but can be practiced without the resources to train a frontier model, making them the realistic entry path.","tag":"strategy"},
+    "kernel": {"term":"Kernel","short":"A small, carefully optimized piece of code that runs one chunk of a neural network's math fast on a chip.","long":"In this context a kernel is low-level code that computes part of a neural network (like a matrix multiply or attention) as fast as possible on a GPU/TPU. Writing fast kernels is a rare, high-value skill and the most direct path into a lab.","tag":"hardware"},
+    "agentic-loop": {"term":"Agentic loop","short":"A program that repeatedly calls an LLM and uses its outputs to accomplish a task.","long":"An agentic loop treats a trained model as a fixed engine and wraps logic around it — prompting it, evaluating its output, and iterating — to produce useful results. Rigorous agent research studies how such loops behave.","tag":"agents"},
+    "grey-box": {"term":"Grey box","short":"Using a model without changing its internals — only its inputs and outputs.","long":"Treating an LLM as a 'grey box' means you don't retrain or inspect its weights; you only feed it inputs and use its outputs cleverly. It's the core stance of agent work.","tag":"agents"},
+    "frontier-lab": {"term":"Frontier lab","short":"An organization building the most capable AI models, e.g. OpenAI, Anthropic, Google DeepMind.","long":"A 'frontier lab' is one of the handful of organizations training the largest, most capable AI models at the cutting edge. Competition for these jobs is intense, which is why a focused edge skill matters.","tag":"strategy"},
+    "accelerator": {"term":"Accelerator","short":"A specialized chip (GPU or TPU) built to do the heavy math of neural networks quickly.","long":"An accelerator is hardware designed to run the massively parallel math of neural networks — most commonly a GPU (graphics processing unit) or a TPU (Google's tensor processing unit). It's the bottom of the stack.","tag":"hardware"}
+  }
+  </script>
+</section>

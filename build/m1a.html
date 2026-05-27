@@ -1,0 +1,312 @@
+<section class="module" id="m1a" data-num="01" data-title="Foundations I — What an LLM Actually Is" data-level="beginner">
+  <h2>Foundations I — What an LLM Actually Is</h2>
+  <p class="lead">Before you can work at the edges of the AI stack, you need to know what sits in the middle. <b>By the end of this module you'll understand what a language model really is — not by magic, but as a concrete machine made of numbers, layers, and one surprisingly simple idea.</b></p>
+
+  <p>Everyone talks about <span data-term="llm">LLMs</span> — ChatGPT, Claude, Gemini — as if they think. They don't, at least not the way you do. Underneath, an LLM is a very large piece of math that does <em>one</em> thing extremely well. This is the most-read page in the course, so we'll go slowly and define every word before we lean on it. No calculus. No prior machine-learning knowledge. Just intuition, built one brick at a time.</p>
+
+  <h3><span class="h3-num">1.1</span> What is a "model"?</h3>
+
+  <p>Start with the most basic idea. In machine learning, a <span data-term="model">model</span> is just a <strong>function</strong> — something that takes an input and produces an output. You give it a question, it gives you an answer. Nothing mystical so far.</p>
+
+  <p>What makes the function special is that it has a huge number of <strong>tunable numbers</strong> inside it. These numbers are called <span data-term="weights">weights</span> (or <strong>parameters</strong>). A modern model can have millions, billions, even hundreds of billions of them. Each weight is just a number, like 0.0421 or −1.7. On their own they mean nothing. Together, they determine exactly how the input gets transformed into the output.</p>
+
+  <div class="callout analogy"><p class="co-h">Analogy</p><p>Picture a giant recording-studio soundboard with a billion little knobs. Turn the knobs one way and the music comes out muddy; turn them another way and it sounds crisp and clear. A model is that soundboard. The "knobs" are the weights, and the whole game is finding the settings that make the output good.</p></div>
+
+  <p>So who turns the knobs? Not a human — there are far too many. Instead, the model <strong>learns</strong> its weights from data. We show it millions of examples, and an automatic procedure nudges every weight a tiny bit, over and over, until the outputs start to look right. That nudging process is called <strong>training</strong>, and we'll come back to it. The key takeaway for now:</p>
+
+  <div class="callout key"><p class="co-h">Key idea</p><p>A model is a function with a huge number of adjustable numbers (weights) inside it. "Learning" means automatically tuning those numbers from data until the function produces good outputs. That's it — there is no hidden ghost, just numbers being tuned.</p></div>
+
+  <h3><span class="h3-num">1.2</span> What is a neural network?</h3>
+
+  <p>The specific kind of function used in modern AI is called a <span data-term="neural-network">neural network</span>. The name sounds biological, but you don't need biology to get it. A neural network is built from <strong>layers</strong> of very simple math stacked on top of each other.</p>
+
+  <p>What math? Honestly, almost the simplest possible. Inside a layer, the network does three things to the numbers flowing through it:</p>
+  <ol>
+    <li><strong>Multiply</strong> — scale each incoming number by a weight.</li>
+    <li><strong>Add</strong> — sum the scaled numbers together.</li>
+    <li><strong>Squash</strong> — pass the result through a simple bending function that adds a gentle curve (so the network isn't just one big straight-line equation).</li>
+  </ol>
+
+  <p>That "squash" step matters more than it looks. If you only ever multiply and add, then stacking a hundred layers gives you exactly the same power as one layer — straight lines stacked on straight lines are still a straight line. The squash (researchers call it a <strong>nonlinearity</strong>) puts a bend in each layer. Stack many bent layers and the network can fold and shape its input into almost any pattern you can imagine.</p>
+
+  <div class="callout analogy"><p class="co-h">Analogy</p><p>Think of folding paper. One fold is simple. But fold it, turn it, fold again, dozens of times, and you can produce astonishingly intricate shapes. Each layer of a neural network is one fold. The depth — many layers stacked — is where the richness comes from. This is why we say models are "deep," and why the field is called <em>deep learning</em>.</p></div>
+
+  <figure class="figure"><div class="fig-body">
+    <svg class="diagram" viewBox="0 0 720 200" role="img" aria-label="Numbers flow into a layer that multiplies, adds, and squashes, then into the next layer">
+      <defs><marker id="arwM1a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" class="dg-mut" fill="currentColor"/></marker></defs>
+      <text x="360" y="24" text-anchor="middle" class="dg-title">One layer of a neural network</text>
+      <rect x="34" y="70" width="120" height="60" rx="10" class="dg-box"/>
+      <text x="94" y="98" text-anchor="middle" class="dg-label">numbers</text>
+      <text x="94" y="116" text-anchor="middle" class="dg-mut">coming in</text>
+      <rect x="248" y="62" width="224" height="76" rx="11" class="dg-box-accent"/>
+      <text x="360" y="90" text-anchor="middle" class="dg-cyan" style="font-weight:700">multiply · add · squash</text>
+      <text x="360" y="112" text-anchor="middle" class="dg-mut">uses this layer's weights</text>
+      <rect x="566" y="70" width="120" height="60" rx="10" class="dg-box"/>
+      <text x="626" y="98" text-anchor="middle" class="dg-label">numbers</text>
+      <text x="626" y="116" text-anchor="middle" class="dg-mut">going out →</text>
+      <line x1="156" y1="100" x2="244" y2="100" class="dg-arrow" marker-end="url(#arwM1a)"/>
+      <line x1="474" y1="100" x2="562" y2="100" class="dg-arrow" marker-end="url(#arwM1a)"/>
+      <text x="626" y="158" text-anchor="middle" class="dg-mut">(feeds the next layer)</text>
+    </svg>
+  </div><figcaption class="fig-cap"><b>Figure.</b> A single layer: numbers come in, get multiplied by weights, summed, and gently bent. A deep network is dozens of these stacked in a row.</figcaption></figure>
+
+  <h3><span class="h3-num">1.3</span> Tokens and the one big idea: next-token prediction</h3>
+
+  <p>Now we get to language. A neural network only understands numbers, but text is made of letters and words. So the first step is to chop the text into pieces and turn each piece into a number. Those pieces are called <span data-term="token">tokens</span>.</p>
+
+  <p>A token is usually <strong>not</strong> a whole word — it's a word-piece. Common words like "the" might be one token, but a longer word like "unbelievable" might be split into pieces such as "un", "believ", "able". Spaces, punctuation, and even parts of code all become tokens. The model is handed a vocabulary of tens of thousands of possible tokens, and every token has its own ID number.</p>
+
+  <div class="callout note"><p class="co-h">Good to know</p><p>Why word-pieces and not whole words? Because there are too many possible words (and typos, and names, and made-up terms) to list them all. Breaking text into reusable pieces lets the model spell out <em>any</em> word, even one it has never seen, by combining pieces it knows.</p></div>
+
+  <p>Here is the single most important sentence in this whole module. An LLM is trained to do exactly one task:</p>
+
+  <div class="callout key"><p class="co-h">Key idea</p><p><span data-term="next-token-prediction">Next-token prediction.</span> Given a sequence of tokens, predict the next token. That's the entire training objective. The model reads "The capital of France is" and learns to put high probability on the token "Paris."</p></div>
+
+  <p>It sounds almost too simple to be powerful. But think about what it takes to predict the next token well across the entire internet. To guess the next word in a math proof, you need to do the math. To finish a line of code, you need to know how the code works. To continue a story sensibly, you need to track characters and plot. The objective is simple, but to get good at it the model is forced to absorb an enormous amount of structure about the world. <strong>That apparent intelligence is a side effect of getting very, very good at one prediction task, at massive scale.</strong></p>
+
+  <p>Crucially, the model doesn't output one word with certainty. It outputs a <strong>probability for every token in its vocabulary</strong> — a long list of likelihoods. "Paris" might get 90%, "Lyon" 2%, "Rome" 0.5%, and so on. A separate step then picks from that list to produce the actual next token. The model itself only ever computes the odds.</p>
+
+  <h4>Training vs. inference</h4>
+
+  <p>These two words come up constantly at a lab, and they are easy to mix up. They are completely different activities.</p>
+
+  <div class="tbl-wrap"><table class="data"><caption>Two phases in the life of a model</caption>
+    <thead><tr><th>Phase</th><th>What happens</th><th>Cost &amp; frequency</th></tr></thead>
+    <tbody>
+      <tr><td><b><span data-term="training">Training</span></b></td><td>The weights are <em>learned</em>. The model reads trillions of tokens of text, guesses each next token, sees how wrong it was, and nudges every weight to do better. Done once (per model).</td><td>Enormously expensive — huge clusters of chips running for weeks or months.</td></tr>
+      <tr><td><b><span data-term="inference">Inference</span></b></td><td>The trained model is simply <em>used</em>. Weights are frozen. You give it tokens, it predicts the next one, again and again. This happens every time you chat with it.</td><td>Much cheaper per run, but happens billions of times — so speed here is everything.</td></tr>
+    </tbody>
+  </table></div>
+
+  <div class="callout warn"><p class="co-h">Watch out</p><p>A common myth: "the model keeps learning while I chat with it." It doesn't. During <strong>inference</strong> the weights are locked. The model isn't memorizing your conversation into its parameters — it's just running the same frozen function on new input. Learning only happens during <strong>training</strong>, which is a separate, offline, expensive process.</p></div>
+
+  <p>Why does this distinction matter for <em>you</em>? Because the speed-up work you'll learn later — the highly paid, in-demand "edge" skill — is almost entirely about making <strong>inference</strong> fast and cheap. You optimize the trained model being used billions of times. You don't need a lab's budget to practice that; you only need to run a model once and time it.</p>
+
+  <div class="quiz">
+    <p class="q-tag">Check your understanding</p>
+    <p class="q-text">An LLM is trained to do which single task?</p>
+    <ul class="q-opts">
+      <li><button class="q-opt" data-correct="false">Memorize correct answers to every question it will ever be asked.</button></li>
+      <li><button class="q-opt" data-correct="true">Predict the next token, given the tokens that came before it.</button></li>
+      <li><button class="q-opt" data-correct="false">Search the internet in real time and copy the best matching sentence.</button></li>
+    </ul>
+    <div class="q-explain"><b>Why:</b> The entire training objective is next-token prediction. It doesn't memorize an answer key, and it isn't searching the live internet — at inference it just runs its frozen weights to compute the most likely next token. The "intelligence" emerges because doing this prediction well, at scale, forces it to learn deep structure about language and the world.</div>
+  </div>
+
+  <div class="quiz">
+    <p class="q-tag">Check your understanding</p>
+    <p class="q-text">Which statement about tokens is correct?</p>
+    <ul class="q-opts">
+      <li><button class="q-opt" data-correct="false">Each token is always exactly one English word.</button></li>
+      <li><button class="q-opt" data-correct="false">Tokens are individual letters, one per character.</button></li>
+      <li><button class="q-opt" data-correct="true">A token is a word-piece; a single word may be one token or several, depending on how common it is.</button></li>
+    </ul>
+    <div class="q-explain"><b>Why:</b> Tokens are sub-word pieces. Frequent words can be a single token, while rarer or longer words get split into several. This lets the model represent any word — even ones it has never seen — by combining pieces it knows, without needing an impossibly large list of every whole word.</div>
+  </div>
+
+  <h3><span class="h3-num">1.4</span> The transformer: the shape of a modern LLM</h3>
+
+  <p>So far we have a stack of layers that does next-token prediction. But what's the exact arrangement of those layers? Today, nearly every serious LLM uses one architecture: the <span data-term="transformer">transformer</span>. (The "T" in GPT stands for "transformer.") You don't need to build one to get hired at the edges, but you need a clear mental picture of how it flows.</p>
+
+  <p>Here's the journey of your text through a transformer, end to end:</p>
+  <ol>
+    <li><strong>Tokenize.</strong> Your text is chopped into tokens (we just covered this).</li>
+    <li><strong>Embed.</strong> Each token ID is looked up and turned into a list of numbers called an <span data-term="embedding">embedding</span> — a vector. Think of it as the token's coordinates in a high-dimensional "meaning space," where tokens with similar meanings sit near each other.</li>
+    <li><strong>Transformer blocks.</strong> The embeddings flow through a tall stack of identical <strong>blocks</strong>. Each block lets the tokens <em>share information</em> with one another and then <em>refine</em> their own representation. The block at the top of the stack understands the text far more richly than the one at the bottom.</li>
+    <li><strong>Predict.</strong> After the final block, the model converts the top token's refined representation into that probability list over the whole vocabulary — the next-token prediction.</li>
+  </ol>
+
+  <figure class="figure"><div class="fig-body">
+    <svg class="diagram" viewBox="0 0 720 250" role="img" aria-label="Text becomes tokens, then embeddings, then flows through a stack of transformer blocks, then becomes next-token probabilities">
+      <defs><marker id="arwM1a2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" class="dg-mut" fill="currentColor"/></marker></defs>
+      <text x="360" y="24" text-anchor="middle" class="dg-title">How text flows through a transformer</text>
+
+      <rect x="20" y="92" width="118" height="58" rx="10" class="dg-box"/>
+      <text x="79" y="118" text-anchor="middle" class="dg-label">tokens</text>
+      <text x="79" y="136" text-anchor="middle" class="dg-mut">"The cat sat"</text>
+
+      <rect x="166" y="92" width="118" height="58" rx="10" class="dg-box"/>
+      <text x="225" y="118" text-anchor="middle" class="dg-label">embeddings</text>
+      <text x="225" y="136" text-anchor="middle" class="dg-mut">vectors</text>
+
+      <rect x="312" y="64" width="156" height="116" rx="11" class="dg-box-edge glow"/>
+      <text x="390" y="92" text-anchor="middle" class="dg-ember" style="font-weight:700">transformer</text>
+      <text x="390" y="111" text-anchor="middle" class="dg-ember" style="font-weight:700">blocks</text>
+      <text x="390" y="134" text-anchor="middle" class="dg-mut">a tall stack;</text>
+      <text x="390" y="150" text-anchor="middle" class="dg-mut">tokens share &amp;</text>
+      <text x="390" y="166" text-anchor="middle" class="dg-mut">refine info</text>
+
+      <rect x="496" y="92" width="118" height="58" rx="10" class="dg-box"/>
+      <text x="555" y="114" text-anchor="middle" class="dg-label">next-token</text>
+      <text x="555" y="132" text-anchor="middle" class="dg-mut">probabilities</text>
+
+      <line x1="138" y1="121" x2="162" y2="121" class="dg-arrow" marker-end="url(#arwM1a2)"/>
+      <line x1="284" y1="121" x2="308" y2="121" class="dg-arrow" marker-end="url(#arwM1a2)"/>
+      <line x1="468" y1="121" x2="492" y2="121" class="dg-arrow" marker-end="url(#arwM1a2)"/>
+
+      <text x="555" y="176" text-anchor="middle" class="dg-cyan">→ "down" 71%</text>
+      <text x="640" y="121" class="dg-mut">repeat,</text>
+      <text x="640" y="138" class="dg-mut">token by</text>
+      <text x="640" y="155" class="dg-mut">token</text>
+    </svg>
+  </div><figcaption class="fig-cap"><b>Figure.</b> The pipeline: tokens → embeddings → a stack of transformer blocks (the glowing core) → a probability for each possible next token. To write a sentence, the model runs this loop once per token.</figcaption></figure>
+
+  <p>Inside each block, two things happen. First, an operation called <strong>attention</strong> lets every token look at the others and gather context. Second, a small ordinary neural network (multiply-add-squash, like §1.2) refines each token on its own. That first part — attention — is the heart of the whole machine, and it's where we go next.</p>
+
+  <h3><span class="h3-num">1.5</span> Attention — the key operation</h3>
+
+  <p>Why do tokens need to "look at" each other at all? Consider this sentence:</p>
+
+  <blockquote class="callout quote">"The trophy didn't fit in the suitcase because <em>it</em> was too big."<cite>— a classic ambiguity</cite></blockquote>
+
+  <p>What does "it" refer to — the trophy or the suitcase? You know instantly it's the trophy (the trophy is big; that's why it doesn't fit). For the model to predict well, the token "it" must reach back through the sentence and pull in information from "trophy." That reaching-back is exactly what <span data-term="attention">attention</span> does: <strong>each token looks at the other tokens and pulls in the information it needs.</strong></p>
+
+  <div class="callout analogy"><p class="co-h">Analogy</p><p>Imagine each word in the sentence holding up a little sign. The word "it" calls out a request: "I'm a pronoun — who here is a big object I might refer to?" Every other word shows what it has to offer. "Trophy" is the best match, so "it" mostly listens to "trophy." Attention is this matchmaking, done with numbers.</p></div>
+
+  <h4>Query, Key, Value</h4>
+
+  <p>To do that matchmaking, the model gives every token <strong>three vectors</strong> — together called <span data-term="qkv">Query, Key, and Value</span> — all computed from the token's current embedding:</p>
+  <ul>
+    <li><strong>Query (<span class="var">Q</span>)</strong> — "What am I looking for?" The word "it" emits a query meaning roughly <em>"a large physical object."</em></li>
+    <li><strong>Key (<span class="var">K</span>)</strong> — "What do I offer?" The word "trophy" advertises a key meaning roughly <em>"I'm a large physical object."</em></li>
+    <li><strong>Value (<span class="var">V</span>)</strong> — "What will I pass along if you pick me?" The actual information a token hands over once it's been attended to.</li>
+  </ul>
+
+  <p>The mechanism, in plain steps: a token takes its <strong>Query</strong> and compares it against <strong>every</strong> token's <strong>Key</strong>. A good match scores high. Those scores are turned into weights that add up to 1 (using <span data-term="softmax">softmax</span>, defined in a moment). Finally, the token takes a <strong>weighted sum of all the Values</strong> — listening loudly to good matches, quietly to poor ones. The result is the context it was missing.</p>
+
+  <figure class="figure"><div class="fig-body">
+    <svg class="diagram" viewBox="0 0 720 270" role="img" aria-label="The query from the word it is compared against the keys of all words, producing attention weights, then a weighted sum of values">
+      <defs><marker id="arwM1a3" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" class="dg-mut" fill="currentColor"/></marker></defs>
+      <text x="360" y="24" text-anchor="middle" class="dg-title">Attention: the word "it" gathers context</text>
+
+      <rect x="30" y="112" width="120" height="52" rx="10" class="dg-box-accent"/>
+      <text x="90" y="135" text-anchor="middle" class="dg-cyan" style="font-weight:700">"it"</text>
+      <text x="90" y="153" text-anchor="middle" class="dg-mut">emits Query</text>
+
+      <text x="250" y="60" text-anchor="middle" class="dg-mut">each word's Key + Value</text>
+      <rect x="196" y="72" width="108" height="40" rx="8" class="dg-box"/>
+      <text x="250" y="97" text-anchor="middle" class="dg-label">"trophy"</text>
+      <rect x="196" y="124" width="108" height="40" rx="8" class="dg-box"/>
+      <text x="250" y="149" text-anchor="middle" class="dg-label">"suitcase"</text>
+      <rect x="196" y="176" width="108" height="40" rx="8" class="dg-box"/>
+      <text x="250" y="201" text-anchor="middle" class="dg-label">"fit"</text>
+
+      <line x1="150" y1="132" x2="192" y2="96" class="dg-arrow" marker-end="url(#arwM1a3)"/>
+      <line x1="150" y1="138" x2="192" y2="144" class="dg-arrow" marker-end="url(#arwM1a3)"/>
+      <line x1="150" y1="144" x2="192" y2="192" class="dg-arrow" marker-end="url(#arwM1a3)"/>
+
+      <text x="395" y="60" text-anchor="middle" class="dg-mut">match → weight</text>
+      <rect x="350" y="72" width="92" height="40" rx="8" class="dg-box-edge glow"/>
+      <text x="396" y="97" text-anchor="middle" class="dg-ember" style="font-weight:700">0.80</text>
+      <rect x="350" y="124" width="92" height="40" rx="8" class="dg-box"/>
+      <text x="396" y="149" text-anchor="middle" class="dg-label">0.15</text>
+      <rect x="350" y="176" width="92" height="40" rx="8" class="dg-box"/>
+      <text x="396" y="201" text-anchor="middle" class="dg-label">0.05</text>
+
+      <line x1="304" y1="92" x2="346" y2="92" class="dg-arrow" marker-end="url(#arwM1a3)"/>
+      <line x1="304" y1="144" x2="346" y2="144" class="dg-arrow" marker-end="url(#arwM1a3)"/>
+      <line x1="304" y1="196" x2="346" y2="196" class="dg-arrow" marker-end="url(#arwM1a3)"/>
+
+      <rect x="520" y="112" width="158" height="52" rx="10" class="dg-box-accent"/>
+      <text x="599" y="134" text-anchor="middle" class="dg-cyan" style="font-weight:700">weighted sum</text>
+      <text x="599" y="152" text-anchor="middle" class="dg-mut">of Values → context</text>
+
+      <line x1="442" y1="92" x2="516" y2="128" class="dg-arrow" marker-end="url(#arwM1a3)"/>
+      <line x1="442" y1="144" x2="516" y2="138" class="dg-arrow" marker-end="url(#arwM1a3)"/>
+      <line x1="442" y1="196" x2="516" y2="150" class="dg-arrow" marker-end="url(#arwM1a3)"/>
+      <text x="599" y="186" text-anchor="middle" class="dg-mut">("it" now knows it ≈ trophy)</text>
+    </svg>
+  </div><figcaption class="fig-cap"><b>Figure.</b> The Query of "it" matches each word's Key, giving weights via softmax (0.80 / 0.15 / 0.05). The output is the weighted sum of every word's Value — so "it" listens mostly to "trophy."</figcaption></figure>
+
+  <h4>The real formula</h4>
+
+  <p>That entire process is captured by one famous equation. Don't be scared of it — you already understand every step it describes. We'll name each symbol right after.</p>
+
+  <div class="eq">Attention(<span class="var">Q,K,V</span>) = softmax<span class="op">(</span>
+    <span class="frac"><span class="fn"><span class="var">Q K</span><sup>⊤</sup></span><span class="fd">√<span class="var">d</span><sub>k</sub></span></span>
+    <span class="op">)</span> <span class="var">V</span>
+    <span class="eqn-tag">— scaled dot-product attention</span></div>
+
+  <p>Reading it piece by piece:</p>
+  <ul>
+    <li><strong><span class="var">Q</span> (Query)</strong> — the "what am I looking for" vectors, one per token. Stacked together they form the matrix <span class="var">Q</span>.</li>
+    <li><strong><span class="var">K</span> (Key)</strong> — the "what do I offer" vectors, one per token, stacked into <span class="var">K</span>.</li>
+    <li><strong><span class="var">V</span> (Value)</strong> — the "what I'll pass on" vectors, one per token, stacked into <span class="var">V</span>.</li>
+    <li><strong><span class="var">Q K</span><sup>⊤</sup></strong> — the heart of the match. The little <sup>⊤</sup> means "transpose," a bookkeeping flip so the shapes line up to multiply. The result is a <strong>dot product</strong> between each Query and every Key. A dot product is large when two vectors point the same way and small when they don't — so it's a natural <strong>similarity score</strong>. Big number = "this Query and this Key are a great match."</li>
+    <li><strong>÷ √<span class="var">d</span><sub>k</sub></strong> — we divide by the square root of <span class="var">d</span><sub>k</sub>, the length of each Key vector (its number of dimensions). Why? In long vectors the dot products can grow into very large numbers, which makes the next step (softmax) lopsided and unstable — it would slam all the weight onto a single token. Dividing by √<span class="var">d</span><sub>k</sub> rescales the scores to a sensible range. This is the "scaled" in "scaled dot-product attention."</li>
+    <li><strong>softmax(…)</strong> — takes that grid of scores and turns each token's row into clean weights: every weight is between 0 and 1, and they all add up to 1. (More on softmax just below.)</li>
+    <li><strong>… <span class="var">V</span></strong> — finally, multiply those weights by the Values. That's the <strong>weighted sum</strong>: each token's output is a blend of all the Values, dominated by the tokens it matched most strongly. Out comes the gathered context.</li>
+  </ul>
+
+  <h4>What softmax does</h4>
+
+  <p><span data-term="softmax">Softmax</span> is a small function worth knowing by name, because it shows up everywhere in this field. It takes a list of raw scores (which can be any size, even negative) and converts them into a <strong>probability distribution</strong>: all the outputs are positive, and they sum to exactly 1. Bigger inputs get bigger shares, but <em>every</em> input keeps a nonzero slice.</p>
+
+  <div class="callout warn"><p class="co-h">Watch out</p><p>Softmax does <strong>not</strong> just "pick the maximum." A hard max would hand 100% to the single top score and 0% to everything else. Softmax is the <em>soft</em> version: the winner gets the biggest weight, but the others still get a small share. That softness is essential — it lets a token blend information from several others, and it's what makes the model trainable in the first place.</p></div>
+
+  <details class="aside"><summary>Optional deep dive: shapes, dₖ, and why √ specifically <span class="aside-tag">advanced</span></summary>
+  <div class="aside-body"><p>If a sequence has <span class="var">n</span> tokens and each Query/Key has dimension <span class="var">d</span><sub>k</sub>, then <span class="var">Q</span> and <span class="var">K</span> are each <span class="var">n</span> × <span class="var">d</span><sub>k</sub> matrices, so <span class="var">Q K</span><sup>⊤</sup> is an <span class="var">n</span> × <span class="var">n</span> grid — one similarity score for every pair of tokens. That <span class="var">n</span> × <span class="var">n</span> grid is exactly why attention gets expensive: double the tokens and you roughly quadruple the work and memory. Hold on to that fact — it is the entire reason Flash Attention exists (Module 05).</p>
+  <p>As for √<span class="var">d</span><sub>k</sub>: if the entries of <span class="var">Q</span> and <span class="var">K</span> behave like independent random numbers, the dot product of two length-<span class="var">d</span><sub>k</sub> vectors grows in size proportionally to √<span class="var">d</span><sub>k</sub>. Dividing by √<span class="var">d</span><sub>k</sub> cancels that growth, keeping the scores in a stable range no matter how big the vectors are.</p></div></details>
+
+  <div class="quiz">
+    <p class="q-tag">Check your understanding</p>
+    <p class="q-text">What does the attention operation actually compute for a given token?</p>
+    <ul class="q-opts">
+      <li><button class="q-opt" data-correct="false">It selects the single most relevant other token and copies that token exactly.</button></li>
+      <li><button class="q-opt" data-correct="true">A weighted sum over the Values of all tokens, where the weights come from how well this token's Query matches each token's Key.</button></li>
+      <li><button class="q-opt" data-correct="false">It averages all the other tokens equally, ignoring relevance.</button></li>
+    </ul>
+    <div class="q-explain"><b>Why:</b> Attention is a <em>weighted</em> sum over <em>all</em> tokens' Values — not a single pick, and not a flat average. The weights come from Query·Key similarity passed through softmax, so relevant tokens count more and irrelevant ones count little (but never exactly zero). That's how "it" can listen mostly to "trophy" while still hearing a whisper from the rest of the sentence.</div>
+  </div>
+
+  <div class="quiz">
+    <p class="q-tag">Check your understanding</p>
+    <p class="q-text">Why divide the <span class="var">Q K</span><sup>⊤</sup> scores by √<span class="var">d</span><sub>k</sub> before the softmax?</p>
+    <ul class="q-opts">
+      <li><button class="q-opt" data-correct="false">To make the math run faster on the GPU.</button></li>
+      <li><button class="q-opt" data-correct="true">To keep the scores from getting too large, which would make softmax lopsided and unstable.</button></li>
+      <li><button class="q-opt" data-correct="false">To convert the scores into whole numbers.</button></li>
+    </ul>
+    <div class="q-explain"><b>Why:</b> With long vectors the dot products can balloon into very large numbers. Feed those into softmax and it collapses almost all the weight onto one token — brittle and hard to train. Dividing by √<span class="var">d</span><sub>k</sub> (the Key dimension) rescales the scores to a stable range. It's purely about numerical stability, not speed or rounding.</div>
+  </div>
+
+  <h3><span class="h3-num">1.6</span> Why these foundations are your edge</h3>
+
+  <p>Here's the payoff, and the through-line of the whole course. Look back at what attention requires: every token compares against every other token, producing a grid of scores, a softmax, and a giant weighted sum — repeated in every block, for every token, billions of times during <span data-term="inference">inference</span>. <strong>Attention is the single most expensive operation in an LLM.</strong></p>
+
+  <p>That expense is an opportunity. In <strong>Module 04</strong> you'll learn about <strong>kernels</strong> — the low-level code that makes a model's math run fast on a chip. In <strong>Module 05</strong> you'll meet <strong>Flash Attention</strong>, a famous, specific kernel whose entire job is to make this exact attention operation dramatically faster and more memory-efficient. The whole model is the thing kernels speed up; attention is the juiciest target.</p>
+
+  <div class="callout key"><p class="co-h">Key idea</p><p>Everything in this course builds on what you just learned. The "edges" where you can get hired — making models run fast (kernels, Flash Attention) and using them cleverly (agents) — all operate on this exact machine: tokens, embeddings, transformer blocks, and attention. Master these foundations and the edge skills stop looking like magic and start looking like engineering.</p></div>
+
+  <p>You don't need a frontier lab's budget to understand or optimize any of this. You need to understand the machine — which you now do — and then go deep on one edge. That's the plan, and it starts here.</p>
+
+  <div class="checkpoint"><p class="cp-h">✓ Checkpoint — you should now be able to…</p>
+  <ul>
+    <li>Explain what a "model" is: a function with billions of tunable weights, learned from data.</li>
+    <li>Say what a neural network does in a layer (multiply, add, squash) and why depth matters.</li>
+    <li>Define a token and state the one training objective of an LLM: next-token prediction.</li>
+    <li>Tell training apart from inference, and say why the weights are frozen during a chat.</li>
+    <li>Trace text through a transformer: tokens → embeddings → blocks → next-token probabilities.</li>
+    <li>Explain attention in plain English, name Q, K, and V, and say what softmax does.</li>
+    <li>State why attention is the expensive operation that kernels and Flash Attention optimize.</li>
+  </ul></div>
+
+  <p>Next, we'll build a little more of the toolkit you need — and then we head straight for the edges, where your job hunt actually gets won.</p>
+
+  <script type="application/json" class="glossary-add">
+  {
+    "model": {"term":"Model","short":"A function with many tunable numbers (weights) inside, adjusted from data until its outputs are good.","long":"In machine learning a model is a function from inputs to outputs whose behavior is controlled by a large set of adjustable numbers called weights. 'Learning' means tuning those weights from data so the function produces useful outputs.","tag":"foundations"},
+    "weights": {"term":"Weights (parameters)","short":"The tunable numbers inside a model that determine how inputs become outputs.","long":"Weights, also called parameters, are the numbers a model adjusts during training. A modern LLM has billions of them. Individually meaningless, together they encode everything the model has learned.","tag":"foundations"},
+    "neural-network": {"term":"Neural network","short":"A model built from layers of simple math (multiply, add, and a squashing function) stacked deep.","long":"A neural network is a function made of stacked layers, each performing a multiply, an add, and a nonlinear 'squash'. Stacking many such layers (deep learning) lets the network represent very complex patterns.","tag":"foundations"},
+    "token": {"term":"Token","short":"A word-piece — the small chunk of text an LLM reads and predicts, each with an ID number.","long":"Text is split into tokens, which are usually sub-word pieces rather than whole words. Each token maps to an ID from a fixed vocabulary. Breaking text into pieces lets a model represent any word, even unseen ones, by combining known pieces.","tag":"foundations"},
+    "embedding": {"term":"Embedding","short":"A list of numbers (a vector) representing a token's position in a high-dimensional 'meaning space'.","long":"An embedding turns a token ID into a vector of numbers. Tokens with similar meanings get nearby embeddings, giving the network a numeric, geometric representation of language it can compute with.","tag":"foundations"},
+    "next-token-prediction": {"term":"Next-token prediction","short":"The single task an LLM is trained on: given previous tokens, predict the next one.","long":"Next-token prediction is the LLM training objective. The model reads a sequence of tokens and outputs a probability for every possible next token. Doing this well at massive scale is what produces the model's apparent intelligence.","tag":"foundations"},
+    "transformer": {"term":"Transformer","short":"The neural-network architecture behind modern LLMs: embeddings flow through a stack of attention-based blocks.","long":"The transformer is the dominant LLM architecture. Tokens become embeddings, then pass through a stack of identical blocks where attention lets tokens share information and a small network refines each one. The 'T' in GPT stands for transformer.","tag":"foundations"},
+    "attention": {"term":"Attention","short":"The operation that lets each token look at other tokens and pull in the information it needs.","long":"Attention lets every token gather context from the others. Each token emits a Query, every token has a Key and a Value; a token weights the other tokens by how well its Query matches their Keys (via softmax) and takes a weighted sum of their Values. It is the core, and most expensive, operation of a transformer.","tag":"foundations"},
+    "softmax": {"term":"Softmax","short":"A function that turns a list of raw scores into positive weights that sum to 1.","long":"Softmax converts any list of numbers into a probability distribution: all outputs are positive and sum to 1, with bigger inputs getting bigger shares. Unlike a hard maximum, it keeps every entry nonzero — a 'soft' selection used in attention and in the model's final output.","tag":"foundations"},
+    "qkv": {"term":"Query, Key, Value (Q, K, V)","short":"Three vectors per token: what it's looking for (Q), what it offers (K), what it passes on (V).","long":"In attention, each token produces a Query (what it seeks), a Key (what it advertises), and a Value (the information it passes along). A token matches its Query against all Keys to get weights, then sums the Values by those weights.","tag":"foundations"},
+    "training": {"term":"Training","short":"The expensive, one-time process of learning a model's weights from data.","long":"Training is where a model's weights are learned: it reads enormous amounts of data, predicts each next token, measures its error, and nudges every weight to do better. It requires huge clusters of chips running for weeks or months.","tag":"foundations"},
+    "inference": {"term":"Inference","short":"Using a trained model with its weights frozen — what happens every time you chat with it.","long":"Inference is running a finished model on new input. The weights are frozen; the model simply predicts the next token over and over. It is cheaper per run than training but happens billions of times, so making inference fast is the focus of kernel work.","tag":"foundations"}
+  }
+  </script>
+</section>

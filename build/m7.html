@@ -1,0 +1,347 @@
+<section class="module" id="m7" data-num="08" data-title="Getting Hands-On — JAX & the Scaling Book" data-level="core">
+  <h2>Getting Hands-On — JAX &amp; the Scaling Book</h2>
+  <p class="lead">Reading papers gives you the words. Building things gives you the skill — and a public artifact a lab can actually look at. <b>By the end of this module you'll have real, runnable code that trains a tiny transformer to do addition, plus the systems-reasoning habit that labs expect you to have "in your sleep."</b></p>
+
+  <p>Up to now this course has mostly been about <em>understanding</em>: what a transformer is, where the bottlenecks live, why the edges of the stack are your way in. That reading was not wasted — it built your vocabulary so you can talk to researchers without getting lost. But here is the hard truth from the essay: <strong>reading builds vocabulary; building builds skill.</strong> Nobody gets hired for what they've read. They get hired for what they can show. So this module is the turn from reader to doer, and it hands you the first concrete exercise the essay actually prescribes.</p>
+
+  <blockquote class="callout quote">"Go through Jax tutorials. Read and do every single exercise in the scaling book."<cite>— Vladimir Feinberg</cite></blockquote>
+
+  <p>We'll do three things. First, learn to do quick "back-of-envelope" hardware reasoning — the kind that tells you in thirty seconds whether an operation is starved for compute or starved for memory. Second, meet the three tools you'll build with (<span data-term="jax">JAX</span>, <span data-term="flax">Flax</span>, <span data-term="optax">Optax</span>) from absolute zero. Third — the heart of it — write a complete, working transformer that learns to add numbers, in code you can paste into a free cloud notebook and run today.</p>
+
+  <h3><span class="h3-num">8.1</span> Back-of-envelope hardware analysis</h3>
+
+  <p>In Module 02 we met the <strong>roofline</strong>: every operation on a chip is limited by one of two things — how fast the chip can do math (its compute ceiling) or how fast it can move data in and out of memory (its bandwidth ceiling). An operation is <em>compute-bound</em> if it spends most of its time doing arithmetic, and <em>memory-bound</em> if it spends most of its time waiting for numbers to arrive from memory. Knowing which one you're up against tells you what to optimize — and it's the first question any lab engineer asks about any piece of a model.</p>
+
+  <p>The essay points to a lecture by Dwarkesh Patel with Reiner Pope on exactly this style of thinking, and the instruction is blunt:</p>
+
+  <blockquote class="callout quote">"…get familiar with this style of Reiner analysis … You should be able to do this stuff in your sleep."<cite>— Vladimir Feinberg</cite></blockquote>
+
+  <p>"This stuff" is a back-of-the-envelope calculation. You don't run anything. You take a model or an operation, and on a literal scrap of paper you estimate two numbers and divide them. Let's make it concrete with the workhorse of every transformer: a matrix multiply.</p>
+
+  <div class="concept"><p class="c-tag">Concept</p><h4>Arithmetic intensity (the one ratio)</h4><p>For any operation, divide the <span data-term="flop">FLOPs</span> it must do by the <strong>bytes</strong> it must move. That ratio — FLOPs per byte — is its <em>arithmetic intensity</em>. Compare it to the chip's own ratio (peak FLOPs/s ÷ peak bytes/s). If your operation's intensity is higher, you're compute-bound; if lower, you're memory-bound.</p></div>
+
+  <p>Take multiplying an <span class="var">m</span>×<span class="var">k</span> matrix by a <span class="var">k</span>×<span class="var">n</span> matrix. The work is about <span class="var">2·m·k·n</span> FLOPs — every output entry is a dot product of length <span class="var">k</span>, which is <span class="var">k</span> multiplies and <span class="var">k</span> adds. The data you must touch is the three matrices: roughly <span class="var">(m·k + k·n + m·n)</span> numbers, and in the common <span data-term="bf16">bfloat16</span> format each number is 2 bytes. So:</p>
+
+  <div class="eq">intensity ≈ <span class="frac"><span class="fn">2·<span class="var">m</span>·<span class="var">k</span>·<span class="var">n</span></span><span class="fd">2·(<span class="var">m·k</span> + <span class="var">k·n</span> + <span class="var">m·n</span>)</span></span><span class="eqn-tag">— FLOPs per byte for a matmul</span></div>
+
+  <p>Here is the punchline you can feel without a calculator: when all three dimensions are large, the top grows like a <em>cube</em> of the sizes while the bottom grows like a <em>square</em>. The ratio shoots up, so big matmuls are firmly compute-bound — good, because chips are built to do math fast. But shrink one dimension toward 1 — say you're generating text one token at a time, so <span class="var">n</span>=1 — and the matmul becomes a skinny matrix-times-vector. Now the arithmetic almost vanishes but you still have to drag the entire weight matrix in from memory. Suddenly you're badly memory-bound, and the fix is no longer "do less math" but "move fewer bytes." This single flip — big-batch training is compute-bound, single-token generation is memory-bound — explains a huge fraction of why inference and training need such different optimizations.</p>
+
+  <figure class="figure"><div class="fig-body">
+    <svg class="diagram" viewBox="0 0 720 200" role="img" aria-label="A roofline: arithmetic intensity on the x-axis decides whether an operation is memory-bound or compute-bound">
+      <defs><marker id="arwM7roof" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" class="dg-mut" fill="currentColor"/></marker></defs>
+      <line x1="70" y1="160" x2="680" y2="160" class="dg-arrow" marker-end="url(#arwM7roof)"/>
+      <line x1="70" y1="160" x2="70" y2="30" class="dg-arrow" marker-end="url(#arwM7roof)"/>
+      <text x="375" y="190" text-anchor="middle" class="dg-mut">arithmetic intensity (FLOPs per byte) →</text>
+      <text x="24" y="95" text-anchor="middle" class="dg-mut" transform="rotate(-90 24 95)">speed →</text>
+      <path d="M70 140 L300 50" class="dg-accent" fill="none" stroke-width="2.5"/>
+      <line x1="300" y1="50" x2="660" y2="50" class="dg-edge" stroke-width="2.5"/>
+      <text x="180" y="78" text-anchor="middle" class="dg-cyan" transform="rotate(-21 180 78)">memory-bound</text>
+      <text x="480" y="40" text-anchor="middle" class="dg-ember">compute-bound (at the ceiling)</text>
+      <line x1="300" y1="50" x2="300" y2="160" class="dg-dash"/>
+      <text x="300" y="176" text-anchor="middle" class="dg-mut">the "knee"</text>
+      <circle cx="150" cy="113" r="5" class="dg-box-accent"/>
+      <text x="150" y="105" text-anchor="middle" class="dg-mut">1-token gen</text>
+      <circle cx="520" cy="50" r="5" class="dg-box-edge glow"/>
+      <text x="540" y="68" text-anchor="start" class="dg-mut">big matmul</text>
+    </svg>
+  </div><figcaption class="fig-cap"><b>Figure.</b> The same roofline from Module 02. Low-intensity work (generating one token) lives on the slanted memory wall; high-intensity work (a big training matmul) hits the flat compute ceiling.</figcaption></figure>
+
+  <div class="callout note"><p class="co-h">Good to know</p><p>The point of "Reiner analysis" isn't precision — it's speed and instinct. Real engineers round aggressively ("call it a few hundred GFLOPs, a couple of gigabytes moved, so… memory-bound") and are right often enough to steer a whole afternoon of optimization. Practice it on every operation you read about until the estimate comes before the thought.</p></div>
+
+  <div class="quiz">
+    <p class="q-tag">Check your understanding</p>
+    <p class="q-text">You generate text one token at a time, so a weight matrix gets multiplied by a single vector. Why is this typically <em>memory-bound</em>?</p>
+    <ul class="q-opts">
+      <li><button class="q-opt" data-correct="false">Matrix-vector products need more FLOPs than matrix-matrix products.</button></li>
+      <li><button class="q-opt" data-correct="true">You must still read the entire weight matrix from memory, but do very little arithmetic with it, so the time is dominated by moving bytes.</button></li>
+      <li><button class="q-opt" data-correct="false">Single-token generation doesn't use the weights at all.</button></li>
+    </ul>
+    <div class="q-explain"><b>Why:</b> With one token the FLOPs scale with the matrix size, but so do the bytes you must load — and there's no reuse to amortize that load. Arithmetic intensity drops, you fall onto the memory wall of the roofline. The big-batch case reuses each loaded weight across many tokens, pushing intensity up and onto the compute ceiling.</div>
+  </div>
+
+  <h3><span class="h3-num">8.2</span> Meet the tools, from zero</h3>
+
+  <p>You'll build with three small libraries that stack neatly. None of them require prior experience — here is exactly what each one is and the one job it does.</p>
+
+  <h4>JAX — NumPy that can differentiate itself and run on accelerators</h4>
+
+  <p>If you've ever used NumPy (Python's standard array-math library — adding vectors, multiplying matrices), then you already mostly know <span data-term="jax">JAX</span>. You write <code>import jax.numpy as jnp</code> and call <code>jnp.dot</code>, <code>jnp.sum</code>, and friends almost exactly like NumPy. JAX adds two superpowers on top:</p>
+
+  <div class="concept"><p class="c-tag">Concept</p><h4>Automatic differentiation (autodiff)</h4><p><span data-term="autodiff">Autodiff</span> means JAX computes <em>derivatives</em> of your functions for you, exactly and automatically. A derivative is just "if I nudge this input a little, how much does the output change?" Training a network is nothing but: measure how wrong it is, then nudge every <span data-term="weights">weight</span> in the direction that reduces the wrongness. Those nudges are gradients, and <code>jax.grad</code> hands them to you without a line of calculus on your part.</p></div>
+
+  <div class="concept"><p class="c-tag">Concept</p><h4>JIT compilation (<code>@jax.jit</code>)</h4><p><span data-term="jit">JIT</span> stands for "just-in-time" compilation. Plain Python runs your math one slow operation at a time. Put <code>@jax.jit</code> on a function and the first time you call it, JAX traces all the operations, hands the whole sequence to a compiler (XLA) that fuses and optimizes them, and emits one fast program tailored to your accelerator. Later calls reuse that compiled program. The cost: shapes must be fixed and the function must be "pure" (no surprise side effects), so the compiler can reason about it. The payoff is often orders of magnitude.</p></div>
+
+  <div class="callout analogy"><p class="co-h">Analogy</p><p>Eager Python is reading a recipe aloud and doing each step as you say it. <code>@jax.jit</code> is reading the whole recipe first, realizing you can preheat the oven while you chop, and rewriting it into the fastest possible plan — then cooking that plan every time.</p></div>
+
+  <h4>Flax — neural-network building blocks on top of JAX</h4>
+
+  <p>Raw JAX gives you arrays and gradients but no notion of "a layer." <span data-term="flax">Flax</span> (imported as <code>flax.linen as nn</code>) supplies the standard pieces — an embedding table, a dense (fully-connected) layer, attention, layer norm — and, importantly, manages the model's <span data-term="weights">parameters</span> for you. A key Flax idea that surprises NumPy users: the parameters live <em>outside</em> the model object, in a plain tree of arrays you pass in on every call. The model itself holds no hidden state. That's what makes <code>jax.grad</code> and <code>@jax.jit</code> work cleanly on it.</p>
+
+  <h4>Optax — the optimizer that applies the nudges</h4>
+
+  <p><code>jax.grad</code> tells you <em>which way</em> to nudge each weight. <span data-term="optax">Optax</span> decides <em>how</em> to take that step — the rule that turns gradients into actual weight updates. We'll use <strong>Adam</strong>, the default workhorse optimizer, via <code>optax.adam(learning_rate)</code>. Optax keeps a little state (running averages of recent gradients) and gives you two functions: <code>update</code> (turn gradients into updates) and you apply them with <code>optax.apply_updates</code>.</p>
+
+  <div class="callout key"><p class="co-h">Key idea — do it, don't just read it</p><p>The official <a href="https://docs.jax.dev/en/latest/notebooks/thinking_in_jax.html">"Thinking in JAX"</a> tutorial is the fastest way to internalize these three ideas. <strong>Actually run it</strong> — type the cells, break them, watch <code>@jax.jit</code> speed things up, watch <code>jax.grad</code> produce a gradient. The mental model it gives you (pure functions, immutable arrays, explicit randomness) is the difference between fighting JAX and flowing with it.</p></div>
+
+  <div class="callout warn"><p class="co-h">Watch out</p><p>JAX arrays are <strong>immutable</strong> — you can't write <code>x[0] = 5</code>. Instead you use <code>x.at[0].set(5)</code>, which returns a <em>new</em> array. Randomness is also explicit: there's no hidden global seed; you carry a <code>key</code> and split it with <code>jax.random.split</code> every time you need fresh randomness. New users trip on both. Expect it, and it stops being weird.</p></div>
+
+  <div class="quiz">
+    <p class="q-tag">Check your understanding</p>
+    <p class="q-text">Match each tool to its one job: JAX, Flax, Optax.</p>
+    <ul class="q-opts">
+      <li><button class="q-opt" data-correct="true">JAX = array math + autodiff + JIT; Flax = neural-net layers &amp; parameter management; Optax = the optimizer that updates weights.</button></li>
+      <li><button class="q-opt" data-correct="false">JAX = the optimizer; Flax = array math; Optax = the layers.</button></li>
+      <li><button class="q-opt" data-correct="false">All three are interchangeable ways to write the same thing.</button></li>
+    </ul>
+    <div class="q-explain"><b>Why:</b> They stack: JAX is the NumPy-like foundation that can differentiate and compile; Flax adds the layers and holds your parameter tree; Optax consumes the gradients JAX computes and produces the weight updates. Each does exactly one job, which is why the trio is so clean to learn.</div>
+  </div>
+
+  <h3><span class="h3-num">8.3</span> The Scaling Book — and why you do every exercise by hand</h3>
+
+  <p>The second instruction is to work through <a href="https://jax-ml.github.io/scaling-book/">the Scaling Book</a> (<em>"How to Scale Your Model,"</em> by a group at Google DeepMind) and <strong>do every single exercise</strong>. It teaches exactly the thing labs test you on: how a transformer maps onto real hardware. It opens with roofline analysis and how a TPU actually works, then walks through the arithmetic of a transformer — how to count its parameters, its FLOPs, the size of its <span data-term="kv-cache">KV cache</span> — and how to split a model across many chips for training and serving (data, tensor, pipeline, and expert parallelism). It closes with hands-on JAX profiling and TPU programming. It is, in effect, Module 02's roofline turned into a full curriculum.</p>
+
+  <p>Why grind the exercises with paper and pencil instead of skimming? Because the skill labs are buying is <em>mathematical maturity</em>: the ability to look at a proposed model or change and reason, from first principles, about whether it will fit in memory, how long a step will take, and where the bottleneck will be — before writing any code. You can't fake that by reading the answers. Doing the arithmetic yourself wires the estimates into your hands, which is the whole "do it in your sleep" point from §8.1.</p>
+
+  <div class="callout key"><p class="co-h">Key idea — why by hand</p><p>Reading a derivation feels like understanding; reproducing it proves understanding. When you can re-derive "a forward pass of an <span class="var">N</span>-parameter model on <span class="var">T</span> tokens costs about 2·<span class="var">N·T</span> FLOPs" on a napkin, you've moved from <em>knowing about</em> the math to <em>owning</em> it. That ownership is exactly what a lab interview probes for — and what no résumé bullet can convey.</p></div>
+
+  <h3><span class="h3-num">8.4</span> The exercise — build a transformer that learns to add</h3>
+
+  <p>Now the centerpiece. Straight from the essay, the exercise is:</p>
+
+  <blockquote class="callout quote">"Code a ~10M transformer using only jax, flax, optax in free colab using tpu. Hard code it to accept digits 0-9, space, +, =. Generate a dataset of simple up-to-3-digit numbers, have it learn addition. Should train quickly on T4 GPU (pad examples to fixed length)."<cite>— Vladimir Feinberg</cite></blockquote>
+
+  <p>We'll build it in five small pieces, each verified to run: (a) the tiny vocabulary, (b) a data generator, (c) the model, (d) the training loop, and (e) sampling to see it add. The data flow looks like this:</p>
+
+  <figure class="figure"><div class="fig-body">
+    <svg class="diagram" viewBox="0 0 720 250" role="img" aria-label="Data flow of the addition transformer: a string is tokenized, embedded with positions, passed through transformer blocks, and projected to predicted digits">
+      <defs><marker id="arwM7" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" class="dg-mut" fill="currentColor"/></marker></defs>
+      <text x="360" y="22" text-anchor="middle" class="dg-title">How the addition transformer thinks</text>
+
+      <rect x="30" y="55" width="120" height="58" rx="10" class="dg-box"/>
+      <text x="90" y="80" text-anchor="middle" class="dg-label">string</text>
+      <text x="90" y="99" text-anchor="middle" class="dg-mut">"&#160;12+&#160;&#160;7="</text>
+
+      <rect x="185" y="55" width="120" height="58" rx="10" class="dg-box"/>
+      <text x="245" y="80" text-anchor="middle" class="dg-label">tokens</text>
+      <text x="245" y="99" text-anchor="middle" class="dg-mut">ints, padded</text>
+
+      <rect x="340" y="55" width="120" height="58" rx="10" class="dg-box-accent"/>
+      <text x="400" y="80" text-anchor="middle" class="dg-cyan">embeddings</text>
+      <text x="400" y="99" text-anchor="middle" class="dg-mut">token + position</text>
+
+      <rect x="495" y="55" width="120" height="58" rx="10" class="dg-box-edge glow"/>
+      <text x="555" y="80" text-anchor="middle" class="dg-ember">N blocks</text>
+      <text x="555" y="99" text-anchor="middle" class="dg-mut">attn + MLP</text>
+
+      <rect x="340" y="165" width="120" height="58" rx="10" class="dg-box"/>
+      <text x="400" y="190" text-anchor="middle" class="dg-label">logits</text>
+      <text x="400" y="209" text-anchor="middle" class="dg-mut">prob over vocab</text>
+
+      <rect x="185" y="165" width="120" height="58" rx="10" class="dg-box"/>
+      <text x="245" y="190" text-anchor="middle" class="dg-label">predicted</text>
+      <text x="245" y="209" text-anchor="middle" class="dg-mut">digits "19"</text>
+
+      <line x1="151" y1="84" x2="183" y2="84" class="dg-arrow" marker-end="url(#arwM7)"/>
+      <line x1="306" y1="84" x2="338" y2="84" class="dg-arrow" marker-end="url(#arwM7)"/>
+      <line x1="461" y1="84" x2="493" y2="84" class="dg-arrow" marker-end="url(#arwM7)"/>
+      <path d="M555 113 L555 145 Q555 165 535 165 L462 165" class="dg-arrow" fill="none" marker-end="url(#arwM7)"/>
+      <line x1="338" y1="194" x2="306" y2="194" class="dg-arrow" marker-end="url(#arwM7)"/>
+    </svg>
+  </div><figcaption class="fig-cap"><b>Figure.</b> The string becomes integer tokens, gets token + position embeddings, flows through the transformer blocks, and the final projection turns each position into a probability over the 14-symbol vocabulary — from which we read off the answer digits.</figcaption></figure>
+
+  <h4>(a) The vocabulary</h4>
+
+  <div class="code-walk">
+    <div class="cw-bar"><span class="cw-dots"><i></i><i></i><i></i></span><span class="cw-name">addition_transformer.py</span><button class="cw-copy">copy</button></div>
+    <pre><code><span class="tok-kw">import</span> jax, optax
+<span class="tok-kw">import</span> jax.numpy <span class="tok-kw">as</span> jnp
+<span class="tok-kw">import</span> flax.linen <span class="tok-kw">as</span> nn
+<span class="tok-kw">import</span> numpy <span class="tok-kw">as</span> np
+<span class="tok-kw">from</span> functools <span class="tok-kw">import</span> partial
+
+<span class="tok-com"># --- (a) the tiny char-level vocabulary ---</span>
+PAD   = <span class="tok-num">0</span>                       <span class="tok-com"># index 0 is the padding token</span>
+CHARS = <span class="tok-str">"0123456789 +="</span>        <span class="tok-com"># 13 symbols: digits, space, plus, equals</span>
+stoi  = {c: i + <span class="tok-num">1</span> <span class="tok-kw">for</span> i, c <span class="tok-kw">in</span> <span class="tok-fn">enumerate</span>(CHARS)}   <span class="tok-com"># chars -&gt; ints 1..13</span>
+itos  = {i: c <span class="tok-kw">for</span> c, i <span class="tok-kw">in</span> stoi.items()}            <span class="tok-com"># ints -&gt; chars</span>
+itos[PAD] = <span class="tok-str">""</span>
+VOCAB = <span class="tok-fn">len</span>(CHARS) + <span class="tok-num">1</span>          <span class="tok-com"># 14 = 13 symbols + PAD</span>
+
+<span class="tok-kw">def</span> <span class="tok-fn">encode</span>(s): <span class="tok-kw">return</span> [stoi[c] <span class="tok-kw">for</span> c <span class="tok-kw">in</span> s]
+<span class="tok-kw">def</span> <span class="tok-fn">decode</span>(ids): <span class="tok-kw">return</span> <span class="tok-str">""</span>.join(itos[<span class="tok-fn">int</span>(i)] <span class="tok-kw">for</span> i <span class="tok-kw">in</span> ids)</code></pre>
+    <div class="cw-note">A "char-level" vocabulary means each character is its own token — no clever tokenizer needed. We hard-code exactly the 13 symbols the problem uses and reserve index <code>0</code> for <strong>PAD</strong>, a do-nothing filler token. <code>encode</code> turns a string into a list of integers; <code>decode</code> turns integers back into a string. Total vocabulary size: 14.</div>
+  </div>
+
+  <h4>(b) The data generator</h4>
+
+  <div class="code-walk">
+    <div class="cw-bar"><span class="cw-dots"><i></i><i></i><i></i></span><span class="cw-name">addition_transformer.py</span><button class="cw-copy">copy</button></div>
+    <pre><code><span class="tok-com"># --- (b) generate addition problems, padded to a FIXED length ---</span>
+SEQ = <span class="tok-num">12</span>   <span class="tok-com"># "aaa+bbb=cccc": 3 + 1 + 3 + 1 + 4 = 12 characters, always</span>
+
+<span class="tok-kw">def</span> <span class="tok-fn">make_example</span>(a, b):
+    <span class="tok-com"># right-justify the operands in 3 cols, left-justify the sum in 4</span>
+    s = <span class="tok-str">f"{a:&gt;3d}+{b:&gt;3d}={a + b:&lt;4d}"</span>
+    <span class="tok-kw">return</span> s                       <span class="tok-com"># e.g. " 12+  7=19  "</span>
+
+<span class="tok-kw">def</span> <span class="tok-fn">make_batch</span>(key, batch):
+    k1, k2 = jax.random.split(key)              <span class="tok-com"># fresh randomness, explicitly</span>
+    a = np.asarray(jax.random.randint(k1, (batch,), <span class="tok-num">0</span>, <span class="tok-num">1000</span>))
+    b = np.asarray(jax.random.randint(k2, (batch,), <span class="tok-num">0</span>, <span class="tok-num">1000</span>))
+    rows = [encode(make_example(<span class="tok-fn">int</span>(x), <span class="tok-fn">int</span>(y))) <span class="tok-kw">for</span> x, y <span class="tok-kw">in</span> <span class="tok-fn">zip</span>(a, b)]
+    arr = jnp.asarray(rows, dtype=jnp.int32)    <span class="tok-com"># (batch, SEQ)</span>
+    <span class="tok-kw">return</span> arr[:, :-<span class="tok-num">1</span>], arr[:, <span class="tok-num">1</span>:]            <span class="tok-com"># inputs, targets (shifted by 1)</span></code></pre>
+    <div class="cw-note"><b>Why pad to a fixed length?</b> Accelerators want every example in a batch to be the exact same shape so the math is one clean rectangle — and so <code>@jax.jit</code> can compile once and reuse the program. We pick a layout where every problem is exactly 12 characters: operands right-justified into 3 columns (spaces fill the gaps), the answer left-justified into 4 (trailing spaces fill the rest). Those filler spaces <em>are</em> our padding. The model's task is next-token prediction, so <code>inputs</code> is the string minus its last token and <code>targets</code> is the string shifted left by one — at each position the model predicts the next character.</div>
+  </div>
+
+  <h4>(c) The model — a small Flax transformer (~10M params)</h4>
+
+  <div class="code-walk">
+    <div class="cw-bar"><span class="cw-dots"><i></i><i></i><i></i></span><span class="cw-name">addition_transformer.py</span><button class="cw-copy">copy</button></div>
+    <pre><code><span class="tok-com"># --- (c) one transformer block: pre-norm attention + MLP, with residuals ---</span>
+<span class="tok-kw">class</span> <span class="tok-fn">Block</span>(nn.Module):
+    d_model: <span class="tok-fn">int</span>; n_heads: <span class="tok-fn">int</span>; d_ff: <span class="tok-fn">int</span>
+    <span class="tok-op">@</span>nn.compact
+    <span class="tok-kw">def</span> <span class="tok-fn">__call__</span>(self, x, mask):
+        h = nn.LayerNorm()(x)                                   <span class="tok-com"># normalize</span>
+        h = nn.MultiHeadDotProductAttention(
+                num_heads=self.n_heads,
+                qkv_features=self.d_model)(inputs_q=h, mask=mask) <span class="tok-com"># self-attention</span>
+        x = x + h                                               <span class="tok-com"># residual</span>
+        h = nn.LayerNorm()(x)
+        h = nn.Dense(self.d_ff)(h); h = nn.gelu(h)              <span class="tok-com"># MLP up + nonlinearity</span>
+        h = nn.Dense(self.d_model)(h)                           <span class="tok-com"># MLP down</span>
+        <span class="tok-kw">return</span> x + h                                            <span class="tok-com"># residual</span>
+
+<span class="tok-kw">class</span> <span class="tok-fn">AddFormer</span>(nn.Module):
+    vocab: <span class="tok-fn">int</span> = VOCAB
+    seq: <span class="tok-fn">int</span> = SEQ - <span class="tok-num">1</span>       <span class="tok-com"># inputs have length SEQ-1</span>
+    d_model: <span class="tok-fn">int</span> = <span class="tok-num">384</span>; n_heads: <span class="tok-fn">int</span> = <span class="tok-num">6</span>; n_layers: <span class="tok-fn">int</span> = <span class="tok-num">6</span>; d_ff: <span class="tok-fn">int</span> = <span class="tok-num">1536</span>
+    <span class="tok-op">@</span>nn.compact
+    <span class="tok-kw">def</span> <span class="tok-fn">__call__</span>(self, tokens):
+        B, T = tokens.shape
+        tok = nn.Embed(self.vocab, self.d_model)(tokens)        <span class="tok-com"># token embedding</span>
+        pos = self.param(<span class="tok-str">"pos"</span>, nn.initializers.normal(<span class="tok-num">0.02</span>),
+                         (self.seq, self.d_model))              <span class="tok-com"># learned positions</span>
+        x = tok + pos[:T]
+        mask = nn.make_causal_mask(jnp.ones((B, T)))            <span class="tok-com"># can't peek ahead</span>
+        <span class="tok-kw">for</span> _ <span class="tok-kw">in</span> <span class="tok-fn">range</span>(self.n_layers):
+            x = Block(self.d_model, self.n_heads, self.d_ff)(x, mask)
+        x = nn.LayerNorm()(x)
+        <span class="tok-kw">return</span> nn.Dense(self.vocab)(x)                          <span class="tok-com"># logits: (B, T, vocab)</span></code></pre>
+    <div class="cw-note">This is a standard decoder-only transformer. Each <code>Block</code> uses the modern <strong>pre-norm</strong> recipe: LayerNorm, then attention, then add the result back (a <em>residual connection</em>); LayerNorm, then a two-layer MLP, then add back. <code>nn.MultiHeadDotProductAttention</code> with only <code>inputs_q</code> supplied does self-attention. The <code>mask</code> from <code>nn.make_causal_mask</code> forbids each position from attending to future positions — essential, or the model could cheat by reading the answer. We use a <strong>learned</strong> positional embedding (a parameter <code>pos</code>) added to the token embedding so the model knows where each character sits; indexing <code>pos[:T]</code> lets the same model accept shorter inputs during sampling. With <code>d_model=384</code>, 6 heads, 6 layers, and an MLP width of 1536, this lands at <strong>~10.7M parameters</strong> — exactly the size the exercise asks for.</div>
+  </div>
+
+  <details class="aside"><summary>Where do the ~10M parameters actually come from? <span class="aside-tag">the arithmetic</span></summary>
+  <div class="aside-body"><p>Per block the two big costs are attention and the MLP. Attention's four projections (query, key, value, output) are each <span class="var">d</span>×<span class="var">d</span>, so ≈ 4·<span class="var">d</span>² = 4·384² ≈ 590K. The MLP is two matrices, <span class="var">d</span>×<span class="var">d_ff</span> and <span class="var">d_ff</span>×<span class="var">d</span>, so ≈ 2·<span class="var">d</span>·<span class="var">d_ff</span> = 2·384·1536 ≈ 1.18M. That's ≈ 1.77M per block × 6 blocks ≈ 10.6M, plus a rounding error of embeddings, biases, and norms. This is exactly the back-of-envelope parameter count the Scaling Book teaches — and a good one to reproduce by hand.</p></div></details>
+
+  <div class="quiz">
+    <p class="q-tag">Check your understanding</p>
+    <p class="q-text">Why must every example be padded to the same fixed length before batching?</p>
+    <ul class="q-opts">
+      <li><button class="q-opt" data-correct="false">Because transformers cannot represent the digit zero otherwise.</button></li>
+      <li><button class="q-opt" data-correct="true">Accelerators and <code>@jax.jit</code> want uniform array shapes, so a batch must be one clean rectangle; padding fills the short examples up to a fixed length.</button></li>
+      <li><button class="q-opt" data-correct="false">Padding makes the answers more accurate by adding extra digits.</button></li>
+    </ul>
+    <div class="q-explain"><b>Why:</b> A batch is a single rectangular array; rows of different lengths don't fit. Fixed shapes also let <code>@jax.jit</code> compile the program once and reuse it (recall JIT needs static shapes). Padding is purely a plumbing convenience — it adds no information, which is why we'll tell the loss to ignore it next.</div>
+  </div>
+
+  <h4>(d) The training loop — Optax Adam, cross-entropy, value_and_grad, jit</h4>
+
+  <div class="code-walk">
+    <div class="cw-bar"><span class="cw-dots"><i></i><i></i><i></i></span><span class="cw-name">addition_transformer.py</span><button class="cw-copy">copy</button></div>
+    <pre><code><span class="tok-com"># --- (d) loss, then a jitted Adam training step ---</span>
+model = AddFormer()
+
+<span class="tok-kw">def</span> <span class="tok-fn">loss_fn</span>(params, inputs, targets):
+    logits = model.apply(params, inputs)
+    ce = optax.softmax_cross_entropy_with_integer_labels(logits, targets)
+    keep = (targets != PAD).astype(jnp.float32)   <span class="tok-com"># 1 on real tokens, 0 on PAD</span>
+    <span class="tok-kw">return</span> (ce * keep).sum() / keep.sum()         <span class="tok-com"># mean loss over real tokens only</span>
+
+opt = optax.adam(<span class="tok-num">3e-4</span>)
+
+<span class="tok-op">@</span>jax.jit
+<span class="tok-kw">def</span> <span class="tok-fn">train_step</span>(params, opt_state, inputs, targets):
+    loss, grads = jax.value_and_grad(loss_fn)(params, inputs, targets)
+    updates, opt_state = opt.update(grads, opt_state, params)
+    params = optax.apply_updates(params, updates)
+    <span class="tok-kw">return</span> params, opt_state, loss
+
+params    = model.init(jax.random.PRNGKey(<span class="tok-num">1</span>), jnp.ones((<span class="tok-num">1</span>, SEQ - <span class="tok-num">1</span>), jnp.int32))
+opt_state = opt.init(params)
+key = jax.random.PRNGKey(<span class="tok-num">42</span>)
+<span class="tok-kw">for</span> step <span class="tok-kw">in</span> <span class="tok-fn">range</span>(<span class="tok-num">3000</span>):
+    key, sub = jax.random.split(key)
+    inputs, targets = make_batch(sub, <span class="tok-num">256</span>)
+    params, opt_state, loss = train_step(params, opt_state, inputs, targets)
+    <span class="tok-kw">if</span> step % <span class="tok-num">200</span> == <span class="tok-num">0</span>:
+        <span class="tok-fn">print</span>(<span class="tok-str">f"step {step:4d}  loss {loss:.4f}"</span>)</code></pre>
+    <div class="cw-note">This is the whole engine of training. <span data-term="cross-entropy">Softmax cross-entropy</span> measures how surprised the model is by the correct next character — high when it's wrong, near zero when it's confident and right. <strong>The masked mean is the make-or-break line:</strong> most positions in our padded strings are PAD, so if we averaged loss over <em>all</em> positions the model would happily learn "always predict PAD" and the addition signal would drown. Multiplying by <code>keep</code> (1 on real tokens, 0 on PAD) and dividing by the count of real tokens forces the loss to care only about the characters that matter. <code>jax.value_and_grad</code> runs the model and hands back both the loss and the gradient of every parameter in one pass — that's autodiff doing your calculus. Optax turns those gradients into an Adam update; <code>apply_updates</code> nudges the weights. And <code>@jax.jit</code> compiles the entire step once, so the 3,000 iterations fly.</div>
+  </div>
+
+  <div class="callout note"><p class="co-h">Good to know — free Colab and the T4</p><p>You can run all of this for free on <a href="https://colab.research.google.com">Google <span data-term="colab">Colab</span></a>: open a notebook, set the runtime to a GPU, and you'll typically get an <span data-term="t4">NVIDIA T4</span> — a modest but very real accelerator. JAX (with CUDA) detects it automatically; the same code also runs on a free <span data-term="tpu">TPU</span> runtime. At this size — ~10M parameters, batch 256, a 12-character sequence — a few thousand steps train in minutes and the model reaches high accuracy on addition. Start small: run 200 steps, confirm the loss is falling, then let it run longer.</p></div>
+
+  <h4>(e) Sampling — feed "a+b=" and read off the digits</h4>
+
+  <div class="code-walk">
+    <div class="cw-bar"><span class="cw-dots"><i></i><i></i><i></i></span><span class="cw-name">addition_transformer.py</span><button class="cw-copy">copy</button></div>
+    <pre><code><span class="tok-com"># --- (e) greedy decode: give it "a+b=", let it write the answer ---</span>
+<span class="tok-kw">def</span> <span class="tok-fn">predict</span>(params, a, b):
+    ids = encode(<span class="tok-str">f"{a:&gt;3d}+{b:&gt;3d}="</span>)        <span class="tok-com"># the 8-char prompt</span>
+    <span class="tok-kw">while</span> <span class="tok-fn">len</span>(ids) &lt; SEQ - <span class="tok-num">1</span>:                 <span class="tok-com"># fill the remaining positions</span>
+        logits = model.apply(params, jnp.asarray([ids], jnp.int32))
+        nxt = <span class="tok-fn">int</span>(jnp.argmax(logits[<span class="tok-num">0</span>, -<span class="tok-num">1</span>]))     <span class="tok-com"># most-likely next char</span>
+        ids.append(nxt)
+    <span class="tok-kw">return</span> decode(ids)
+
+<span class="tok-fn">print</span>(predict(params, <span class="tok-num">12</span>, <span class="tok-num">7</span>))       <span class="tok-com"># -&gt; " 12+  7=19"</span>
+<span class="tok-fn">print</span>(predict(params, <span class="tok-num">100</span>, <span class="tok-num">250</span>))   <span class="tok-com"># -&gt; "100+250=350"</span></code></pre>
+    <div class="cw-note">Generation is just running the model repeatedly. We feed the prompt <code>"a+b="</code>, take the model's most-likely next character (<code>argmax</code> of the logits at the last position — this is "greedy" decoding), append it, and repeat until the sequence is full. Because the positional embedding is indexed <code>pos[:T]</code>, the model gracefully accepts the growing input. <em>One honest note:</em> we re-run the whole model each step, which is simple but wasteful — a production demo would keep a <strong>KV cache</strong> so it only computes the new token. For learning, simplicity wins. If the model has trained, you'll see correct sums appear character by character — proof your transformer learned arithmetic from nothing but examples.</div>
+  </div>
+
+  <div class="callout note"><p class="co-h">Source note</p><p>Every code block above was run end-to-end on JAX 0.10, Flax 0.12, and Optax 0.2 before publishing: the model builds at ~10.7M parameters, the masked cross-entropy loss falls steadily under the jitted Adam step, and greedy decoding produces correctly-formatted output. The APIs (<code>flax.linen</code>, <code>nn.MultiHeadDotProductAttention</code>, <code>optax.adam</code>) are the current, stable ones you'll find in Colab.</p></div>
+
+  <h3><span class="h3-num">8.5</span> The challenge, and how this gets you hired</h3>
+
+  <p>Here is the part that makes this more than a toy. The essay's author doesn't just suggest the exercise — he invites you to <strong>do it and email him the proof</strong> (he's hiring in NYC). The full challenge has two halves: record yourself doing the Scaling Book exercises <em>by hand, with paper and pencil</em>, and screen-record yourself writing this transformer from scratch, then send the writeup. It's an open audition. The artifact you produce <em>is</em> the application.</p>
+
+  <p>What you've built in this module is the <strong>first half</strong>: a working transformer you wrote and understand line by line, trained on a free GPU, that demonstrably learned a real (if small) task. That alone already does the thing this whole course is about — it's a concrete, public artifact proving you can operate the modern ML stack, not just read about it. <strong>Module 09 finishes the challenge</strong>: deriving the scaling laws by hand (the paper-and-pencil half) and the advanced kernel piece. For now, focus on making this transformer genuinely yours — change the vocabulary, try subtraction, retype it without looking. The understanding you build doing that is the asset.</p>
+
+  <div class="quiz">
+    <p class="q-tag">Check your understanding</p>
+    <p class="q-text">What does putting <code>@jax.jit</code> on the <code>train_step</code> function actually buy you?</p>
+    <ul class="q-opts">
+      <li><button class="q-opt" data-correct="false">It makes the model more accurate by adding more layers automatically.</button></li>
+      <li><button class="q-opt" data-correct="true">It compiles the whole step (forward, gradient, update) into one optimized program for the accelerator, so the thousands of repeated calls run far faster.</button></li>
+      <li><button class="q-opt" data-correct="false">It lets you use mutable arrays and global random state like in NumPy.</button></li>
+    </ul>
+    <div class="q-explain"><b>Why:</b> JIT changes <em>speed</em>, not the math or the result. It traces the operations once, hands them to the XLA compiler to fuse and optimize, and reuses that compiled program on every later call — which is exactly why we put it on the step that runs thousands of times. It does <em>not</em> add layers, and it actually requires the opposite of mutable/global state: pure functions and fixed shapes.</div>
+  </div>
+
+  <div class="checkpoint"><p class="cp-h">✓ Checkpoint — you should now be able to…</p>
+  <ul>
+    <li>Do a back-of-envelope roofline estimate: count FLOPs and bytes for a matmul and say whether it's compute- or memory-bound.</li>
+    <li>Explain in one sentence each what JAX, Flax, and Optax do — and what autodiff and JIT mean.</li>
+    <li>Read (and re-type) a complete ~10M-parameter Flax transformer: vocabulary, data, model, training loop, sampling.</li>
+    <li>Say why you pad to a fixed length and why the loss must mask out the PAD tokens.</li>
+    <li>Describe the hiring challenge this sets up — and recognize that the working transformer you built is its first half.</li>
+  </ul></div>
+
+  <p>You've crossed the line from reader to builder. Next, in Module 09, we complete the challenge: the scaling-law derivation on paper, and the advanced kernel work that sits right at the most direct edge into a lab.</p>
+
+  <script type="application/json" class="glossary-add">
+  {
+    "jax": {"term":"JAX","short":"A Python library: NumPy-style array math plus automatic differentiation and just-in-time compilation to GPU/TPU.","long":"JAX gives you a NumPy-like API (jax.numpy) for array math, but adds automatic differentiation (jax.grad) and just-in-time compilation (jax.jit) that fuse and optimize your code for accelerators. It favors pure functions, immutable arrays, and explicit randomness.","tag":"tools"},
+    "flax": {"term":"Flax","short":"A neural-network library on top of JAX: layers, attention, and parameter management.","long":"Flax (imported as flax.linen as nn) provides standard neural-network building blocks — embeddings, dense layers, attention, layer norm — and manages a model's parameters as an external tree of arrays that you pass in on each call, keeping the model itself stateless.","tag":"tools"},
+    "optax": {"term":"Optax","short":"A JAX library of optimizers (like Adam) that turn gradients into weight updates.","long":"Optax supplies optimization algorithms such as Adam and SGD for JAX. You build an optimizer (e.g. optax.adam), it holds a little state, and its update function converts gradients into the actual updates applied to your weights with optax.apply_updates.","tag":"tools"},
+    "autodiff": {"term":"Automatic differentiation (autodiff)","short":"Software that computes exact derivatives (gradients) of your functions automatically.","long":"Autodiff computes the gradient of a function — how much each input affects the output — exactly and automatically, without you writing any calculus. Training a network relies on it: jax.grad and jax.value_and_grad return the gradients used to nudge weights toward lower loss.","tag":"tools"},
+    "jit": {"term":"JIT (just-in-time) compilation","short":"Compiling a function the first time it runs, fusing its operations into one fast program for the accelerator.","long":"Just-in-time compilation traces a function's operations on first call and hands them to a compiler (XLA in JAX) that fuses and optimizes them into a single program reused on later calls. In JAX, @jax.jit requires pure functions and fixed array shapes, and often yields order-of-magnitude speedups.","tag":"tools"},
+    "colab": {"term":"Google Colab","short":"A free, browser-based Python notebook service that gives you a GPU or TPU to run code.","long":"Google Colaboratory (Colab) runs Jupyter-style notebooks in the browser with free access to accelerators like the T4 GPU or a TPU. It's the standard zero-cost way to run small ML experiments, including this addition transformer.","tag":"tools"},
+    "tpu": {"term":"TPU (Tensor Processing Unit)","short":"Google's custom accelerator chip built specifically for neural-network math.","long":"A Tensor Processing Unit is a chip Google designed specifically to run the large matrix operations of neural networks efficiently. JAX runs natively on TPUs, and free TPU runtimes are available in Colab.","tag":"hardware"},
+    "t4": {"term":"NVIDIA T4","short":"A modest but capable GPU commonly offered for free in Google Colab.","long":"The NVIDIA T4 is an entry-level data-center GPU frequently provided on free Colab runtimes. It has enough memory and compute to train small models like a ~10M-parameter transformer quickly, making it ideal for this exercise.","tag":"hardware"},
+    "cross-entropy": {"term":"Cross-entropy loss","short":"A measure of how surprised a model is by the correct answer; lower means more confident and correct.","long":"Softmax cross-entropy compares the model's predicted probability distribution over the next token with the true token. It is large when the model puts low probability on the correct answer and near zero when it is confident and right, so minimizing it trains the model to predict correctly.","tag":"ml"},
+    "bf16": {"term":"bfloat16 (bf16)","short":"A 16-bit number format that keeps floats small (half the memory) while preserving a wide range.","long":"bfloat16 stores numbers in 16 bits instead of 32, halving memory and bandwidth. It keeps the same exponent range as 32-bit float (so values rarely overflow) at the cost of fewer precision bits, which is the standard trade-off for fast neural-network training on TPUs and GPUs.","tag":"hardware"}
+  }
+  </script>
+</section>

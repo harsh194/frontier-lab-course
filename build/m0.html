@@ -1,0 +1,184 @@
+<section class="module" id="m0" data-num="00" data-title="The Big Picture & The Path" data-level="intro">
+  <h2>The Big Picture, and the Path Ahead</h2>
+  <p class="lead">A handful of companies are building the most powerful AI on Earth, and they hire from a tiny pool of people who seem impossibly far ahead of you. <b>This course is a ladder from knowing nothing to having one real, hireable skill — and by the end of this module you'll know exactly which rungs you're going to climb.</b></p>
+
+  <p>Let's be honest about the dream up front. You want to work at a <span data-term="frontier-lab">frontier lab</span> — a place like OpenAI, Anthropic, or Google DeepMind that builds the most capable AI models in the world. It sounds out of reach, and the usual advice ("get a PhD, publish papers, know the right people") sounds like it was written for somebody who is already most of the way there. So this course does something different. It assumes you are starting from zero — no advanced math, no machine-learning background, no idea what a GPU does — and it walks you, one careful step at a time, to a place where you can show a lab a specific skill they actually need.</p>
+
+  <p>That last sentence is the whole strategy, and we'll come back to it again and again.</p>
+
+  <h3><span class="h3-num">0.1</span> How to use this course</h3>
+
+  <p>Think of this as a ladder. Each module is one rung, and the rungs are in order on purpose — later ones lean on earlier ones. You do not need to rush. You need to <em>understand</em>. Read a module, take the little quizzes (they are there to catch gaps, not to grade you), and don't move on until the checkpoint box at the end feels true.</p>
+
+  <p>Here is the journey, start to finish, so the path doesn't feel like a fog:</p>
+
+  <figure class="figure"><div class="fig-body">
+    <svg class="diagram" viewBox="0 0 720 360" role="img" aria-label="A roadmap of the course as a climbing ladder from foundations to a hiring plan">
+      <defs>
+        <marker id="arwM0" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" class="dg-mut" fill="currentColor"/></marker>
+      </defs>
+      <text x="360" y="26" text-anchor="middle" class="dg-title">The path: zero → one hireable skill</text>
+
+      <!-- step boxes climbing up-right -->
+      <rect x="40" y="270" width="180" height="52" rx="10" class="dg-box-edge glow"/>
+      <text x="130" y="293" text-anchor="middle" class="dg-ember" style="font-weight:700">You are here</text>
+      <text x="130" y="311" text-anchor="middle" class="dg-mut">big picture + the plan</text>
+
+      <rect x="270" y="270" width="180" height="52" rx="10" class="dg-box"/>
+      <text x="360" y="293" text-anchor="middle" class="dg-label" style="font-weight:700">Foundations</text>
+      <text x="360" y="311" text-anchor="middle" class="dg-mut">how an LLM works</text>
+
+      <rect x="500" y="270" width="180" height="52" rx="10" class="dg-box"/>
+      <text x="590" y="293" text-anchor="middle" class="dg-label" style="font-weight:700">The "edges"</text>
+      <text x="590" y="311" text-anchor="middle" class="dg-mut">where outsiders win</text>
+
+      <rect x="270" y="190" width="180" height="52" rx="10" class="dg-box"/>
+      <text x="360" y="213" text-anchor="middle" class="dg-label" style="font-weight:700">Kernels + quantization</text>
+      <text x="360" y="231" text-anchor="middle" class="dg-mut">making models run fast</text>
+
+      <rect x="500" y="190" width="180" height="52" rx="10" class="dg-box"/>
+      <text x="590" y="213" text-anchor="middle" class="dg-label" style="font-weight:700">Agents</text>
+      <text x="590" y="231" text-anchor="middle" class="dg-mut">putting models to work</text>
+
+      <rect x="270" y="110" width="180" height="52" rx="10" class="dg-box"/>
+      <text x="360" y="133" text-anchor="middle" class="dg-label" style="font-weight:700">Hands-on JAX</text>
+      <text x="360" y="151" text-anchor="middle" class="dg-mut">build something real</text>
+
+      <rect x="500" y="110" width="180" height="52" rx="10" class="dg-box-edge glow"/>
+      <text x="590" y="133" text-anchor="middle" class="dg-ember" style="font-weight:700">Scaling + get hired</text>
+      <text x="590" y="151" text-anchor="middle" class="dg-mut">a concrete plan</text>
+
+      <!-- climbing arrows -->
+      <line x1="220" y1="296" x2="266" y2="296" class="dg-arrow" marker-end="url(#arwM0)"/>
+      <line x1="450" y1="296" x2="496" y2="296" class="dg-arrow" marker-end="url(#arwM0)"/>
+      <path d="M590 268 L590 246" class="dg-arrow" marker-end="url(#arwM0)"/>
+      <line x1="496" y1="216" x2="450" y2="216" class="dg-arrow" marker-end="url(#arwM0)"/>
+      <path d="M360 268 L360 246" class="dg-arrow" marker-end="url(#arwM0)"/>
+      <path d="M360 188 L360 166" class="dg-arrow" marker-end="url(#arwM0)"/>
+      <line x1="450" y1="136" x2="496" y2="136" class="dg-arrow" marker-end="url(#arwM0)"/>
+    </svg>
+  </div><figcaption class="fig-cap"><b>Figure.</b> The course climbs from the big picture, through how models work and the "edges" where you can contribute, into hands-on building, and ends with a concrete plan to get hired. Each rung leans on the one before it.</figcaption></figure>
+
+  <p>Don't worry that half those words are unfamiliar — <em>that's the point of the climb.</em> Right now "kernels," "quantization," and "JAX" are just labels on doors we haven't opened. By the time you reach each one, it will feel ordinary. For this opening module, you only need the shape of the journey and the mindset to make it.</p>
+
+  <h3><span class="h3-num">0.2</span> Who wrote the map we're following</h3>
+
+  <p>This course is built on an essay by <strong>Vladimir Feinberg</strong>, a machine-learning researcher who works on exactly the kind of cutting-edge AI systems we're aiming at. He wrote down, plainly, how someone breaks into this field — and he's generous about crediting the people who taught him along the way, including his advisor <strong>Kai Li</strong>, whose class he points to as formative. (If you want to see the kind of work he does, he also has a public lecture on "pretraining," the giant first training run that creates a model from scratch — more on that at the very end of the course.)</p>
+
+  <p>Before any of the technical advice, Vlad gives two life-principles that he says made the whole difference. They are simple, they cost nothing, and they are the right frame for everything that follows.</p>
+
+  <p><strong>Principle 1 — re-aim every six months.</strong> Roughly twice a year, stop and ask: <em>What do I actually want to accomplish, and where do I want to be?</em> Then make your next few months point at that. Vlad calls this "locally optimizing" — you don't need a perfect ten-year plan, you just need to keep nudging yourself toward the goal, one short stretch at a time.</p>
+
+  <div class="callout analogy"><p class="co-h">Analogy</p><p>It's like hiking toward a mountain in fog. You can't see the summit, so you don't plot the whole route. You just make sure each hour you're walking <em>uphill toward the peak</em>, and you check your compass now and then. Over a year of those checks, you've climbed a mountain.</p></div>
+
+  <p>The second principle is about the unglamorous work that real progress is made of:</p>
+
+  <blockquote class="callout quote">"I never turned up my nose at 'menial' work. If you found the right place to dig for gold, just keep digging. Don't complain about the dirt."<cite>— Vladimir Feinberg</cite></blockquote>
+
+  <p>Read that twice. It's the difference between people who make it and people who stall. Almost all valuable work has tedious parts — debugging the same error for the fifth time, re-running an experiment, reading documentation that should have been clearer. The people who break in are the ones who treat that dirt as part of the gold, not as an insult. If you've picked the right thing to work on (and this course is about picking the right thing), then <em>the boring middle is where the value is buried.</em> Keep digging.</p>
+
+  <div class="quiz">
+    <p class="q-tag">Check your understanding</p>
+    <p class="q-text">What does "locally optimizing" mean in Vlad's first principle?</p>
+    <ul class="q-opts">
+      <li><button class="q-opt" data-correct="false">Writing one detailed ten-year career plan and never changing it.</button></li>
+      <li><button class="q-opt" data-correct="true">Re-checking your goals every few months and pointing your next stretch of work at them, adjusting as you go.</button></li>
+      <li><button class="q-opt" data-correct="false">Only taking jobs near where you currently live.</button></li>
+    </ul>
+    <div class="q-explain"><b>Why:</b> "Local" means <em>over a short stretch</em>, not a fixed grand plan. You reflect roughly every six months on what you want and where you want to be, then optimize the near term toward it. The fog-hiking analogy: keep walking uphill, check the compass often. The third option is just a pun on the word "local."</div>
+  </div>
+
+  <h3><span class="h3-num">0.3</span> Why these jobs are so hard to get</h3>
+
+  <p>Let's not sugar-coat it. Frontier-lab jobs are among the hardest in the world to land, and the reason is simple competition. There is always a small, intense group of people at the very front of the line.</p>
+
+  <div class="concept"><p class="c-tag">Concept</p><h4>The vanguard</h4><p>A "vanguard" is the leading edge of an advancing group — the ones out in front. In this field it means a cohort of elite students, both undergraduates and PhDs, who <em>already</em> publish machine-learning research, win international math and programming competitions, and have personal connections to the labs. They are formidable, and they are who you're standing next to in line.</p></div>
+
+  <p>Here's a telling detail from Vlad's essay. This same top cohort doesn't always chase the same prize. A decade ago, the most sought-after destination for these students was quantitative finance — trading firms like Jane Street and Citadel, where math talent paid spectacularly. The talent didn't change; the magnet did. In Vlad's words, "years ago, this cohort would be scooped by Jane Streets and Citadels; more recently it is OpenAI and Anthropic and GDM" (that last is short for Google DeepMind).</p>
+
+  <div class="callout note"><p class="co-h">Good to know</p><p>The point of naming the vanguard is <strong>not</strong> to scare you off. It's to be honest about who else is in the room, so that the strategy in this course makes sense. Trying to out-compete the vanguard head-on, at their own game, on their timeline, is a losing move for almost everyone. The good news: you don't have to. We'll see why.</p></div>
+
+  <h3><span class="h3-num">0.4</span> The three traits that actually predict success</h3>
+
+  <p>When Vlad looks at the people who make it, he finds three traits underneath the résumés. None of them is "was born a genius." All three can be grown deliberately. Learn these three words — you'll measure yourself against them for the rest of the course.</p>
+
+  <div class="concept"><p class="c-tag">Trait 1</p><h4>Intent</h4><p><span data-term="intent">Intent</span> means deliberately picking <em>one</em> high-value problem to point yourself at, instead of drifting. The people who succeed didn't try to be good at everything — they chose a specific, valuable problem space and aimed at it on purpose. Intent is what turns scattered effort into a direction.</p></div>
+
+  <div class="concept"><p class="c-tag">Trait 2 — the master key</p><h4>Mathematical maturity</h4><p><span data-term="mathematical-maturity">Mathematical maturity</span> is <em>not</em> "memorizing formulas." It's general problem-solving ability — the skill of taking a vague, open-ended, never-seen-before problem and working it down to an answer. As Vlad puts it, "generalized problem solving is the key tool for ambiguous domains." Real research is exactly that kind of ambiguous, so this trait is the master key that unlocks the rest.</p></div>
+
+  <div class="concept"><p class="c-tag">Trait 3</p><h4>Grit</h4><p><span data-term="grit">Grit</span> is the stamina to push through difficulty that doesn't quit. The successful cohort survived what Vlad calls "the soul-crushing difficulty and workload that technically rigorous, proof-based classes put you under." Grit isn't about being miserable for its own sake — it's the proven ability to keep going when a problem is genuinely hard and slow.</p></div>
+
+  <p>Notice how these three fit together. <strong>Intent</strong> chooses the right mountain. <strong>Mathematical maturity</strong> is the all-terrain climbing ability that works on <em>any</em> mountain. <strong>Grit</strong> is the willingness to keep climbing when the slope gets brutal. A lab is, in effect, hiring for these three things — and the rest of this course is a way to build and then <em>demonstrate</em> them.</p>
+
+  <div class="callout analogy"><p class="co-h">Analogy</p><p>Think of "mathematical maturity" like general athletic fitness rather than knowing one sport. A genuinely fit person can pick up tennis, rowing, or climbing fast, because the underlying engine — strength, stamina, coordination — transfers. Proof-based math builds that underlying engine for <em>thinking</em>. That's why it's the master key: it transfers to problems you've never seen.</p></div>
+
+  <div class="quiz">
+    <p class="q-tag">Check your understanding</p>
+    <p class="q-text">Why does Vlad call mathematical maturity the "key tool for ambiguous domains"?</p>
+    <ul class="q-opts">
+      <li><button class="q-opt" data-correct="false">Because lab work is mostly arithmetic, so fast mental math is what counts.</button></li>
+      <li><button class="q-opt" data-correct="true">Because it's general problem-solving ability — the skill of cracking vague, open-ended problems you've never seen before, which is what research actually is.</button></li>
+      <li><button class="q-opt" data-correct="false">Because you must memorize many formulas to pass the interview.</button></li>
+    </ul>
+    <div class="q-explain"><b>Why:</b> Mathematical maturity is about <em>generalized</em> problem solving, not arithmetic speed or memorized formulas. Research problems are ambiguous and open-ended, so the transferable skill of breaking down an unfamiliar problem is exactly what's needed — like general fitness that carries across sports. The other two options confuse "maturity" with rote calculation or memorization.</div>
+  </div>
+
+  <div class="quiz">
+    <p class="q-tag">Check your understanding</p>
+    <p class="q-text">What does "grit" mean in this context?</p>
+    <ul class="q-opts">
+      <li><button class="q-opt" data-correct="false">Working 100-hour weeks and bragging about how little you sleep.</button></li>
+      <li><button class="q-opt" data-correct="true">The stamina to push through genuinely hard, slow work — the kind that rigorous, proof-based coursework demands — without giving up.</button></li>
+      <li><button class="q-opt" data-correct="false">Being naturally talented enough that nothing ever feels difficult.</button></li>
+    </ul>
+    <div class="q-explain"><b>Why:</b> Grit is about persistence through difficulty, demonstrated by surviving soul-crushingly hard coursework — not about counting hours or burning out, and definitely not about finding everything easy (that would be the opposite of grit). It's the willingness to keep climbing when the slope is brutal.</div>
+  </div>
+
+  <h3><span class="h3-num">0.5</span> If you're just starting college</h3>
+
+  <p>If you're early in college, you have a rare gift: time, and an environment built for hard learning. The single best move is to deliberately join that vanguard cohort — not by being the loudest, but by training the traits above on purpose. Concretely, Vlad's advice is direct:</p>
+
+  <ul>
+    <li><strong>Take difficult, proof-based classes.</strong> A "proof-based" class is one where you don't just compute an answer — you have to <em>argue</em>, step by careful step, why something must be true. That's the gym where mathematical maturity is built.</li>
+    <li><strong>Code, constantly.</strong> Writing programs is how abstract ideas become things that actually run. The only way to get fluent is reps.</li>
+    <li><strong>Use AI aggressively — but only for things you already know how to do yourself.</strong> This one is subtle and important (next callout).</li>
+  </ul>
+
+  <div class="callout warn"><p class="co-h">Watch out — the AI trap</p><p>It's tempting to let an AI assistant do the parts you find hard. <strong>Don't.</strong> The whole goal right now is to <em>build the skill in your own head.</em> If you outsource the hard thinking, the skill never forms — you just rent it, and it disappears when the tool does. Use AI to go faster at things you've already mastered (boilerplate, lookups, drafts you could write yourself). That way it's a <em>multiplier on real competence</em>, not a substitute for it. AI makes a strong thinker faster; it can't make a non-thinker strong.</p></div>
+
+  <p>What does this intensity actually feel like? Vlad is candid that the people who make it often give up weekends and nights for a stretch — but read that the right way. The aim is not to suffer, and it is certainly not to glorify burnout. The aim is to spend concentrated time <em>learning to build thought itself</em>: training your brain to reason abstractly, hold hard ideas in your head, and not flinch from difficulty. It's the same logic as training for a sport — you choose hard sessions <em>on purpose</em> because that's what makes you stronger, and you also rest so you can keep going. Deliberate, sustainable intensity. Not a race to exhaustion.</p>
+
+  <p>And if you're not in college, or you're past it? You haven't missed the boat. The traits — intent, problem-solving, grit — can be trained anywhere, and the main path this course teaches (next section) is open to <em>anyone</em> willing to do the work. The college advice above is just one on-ramp, not the only one.</p>
+
+  <h3><span class="h3-num">0.6</span> The way in — for everyone</h3>
+
+  <p>Now the most important idea in this whole course, and the reason you should feel genuinely optimistic. You do <strong>not</strong> have to beat the vanguard at the impossible center of the field. You don't have to train a giant model from scratch (which costs tens of millions of dollars and is locked inside the labs anyway). There is a far more reliable way in, and Vlad states it plainly:</p>
+
+  <blockquote class="callout quote">"The most obvious way to get hired by a lab is to demonstrate that you have a specific skill that the lab requires."<cite>— Vladimir Feinberg</cite></blockquote>
+
+  <p>One specific, valuable, <em>demonstrable</em> skill. Not "be generally impressive." Not "out-genius everyone." Pick a real skill that a lab genuinely needs, get unusually good at it, and build something visible that proves it. That single proof can be louder than any résumé — because it <em>is</em> the work, done.</p>
+
+  <div class="callout key"><p class="co-h">Key idea — the thesis of the whole course</p><p>The reliable path is not to attack the center. It's to build <strong>one specific, valuable skill</strong> at the <em>edges</em> of how AI models are built and run — places where the cost of entry is low but the impact on a lab is high. Get so good at an edge that a lab wants to pull you in.</p></div>
+
+  <p>What exactly are these "edges," and why are they the soft spot in an otherwise impossible wall? That's a big enough idea to deserve its own module. <strong>Module 03 — "The Stack & Why the Edges Win"</strong> — opens up how an AI model actually runs as a stack of layers, and shows precisely where an outsider can stand and contribute. Everything between here and there builds the foundations you'll need to understand it.</p>
+
+  <div class="checkpoint"><p class="cp-h">✓ Checkpoint — you should now be able to…</p>
+  <ul>
+    <li>Describe the shape of this course: foundations → the edges → kernels &amp; quantization → agents → hands-on JAX → scaling &amp; a hiring plan.</li>
+    <li>State Vlad's two life-principles: re-aim every ~6 months, and "don't complain about the dirt."</li>
+    <li>Name the three success traits — <strong>intent</strong>, <strong>mathematical maturity</strong>, <strong>grit</strong> — and say what each one does.</li>
+    <li>Explain why you should use AI only for what you can already do yourself.</li>
+    <li>Say the thesis in one breath: <em>don't attack the center — demonstrate one specific, valuable skill at the edges.</em></li>
+  </ul></div>
+
+  <p>You've got the map and the mindset. Next we open the first door and learn, in plain English, what a language model actually is and how it works. Turn the page — let's start digging.</p>
+
+  <script type="application/json" class="glossary-add">
+  {
+    "intent": {"term":"Intent","short":"Deliberately picking one high-value problem to focus on, instead of drifting across many.","long":"Intent is the trait of choosing a specific, valuable problem space on purpose and aiming your effort at it, rather than working on whatever happens to come along. It's what turns scattered effort into a clear direction and is the first of the three traits that predict success at a frontier lab.","tag":"strategy"},
+    "mathematical-maturity": {"term":"Mathematical maturity","short":"General problem-solving ability for vague, open-ended problems — not memorizing formulas.","long":"Mathematical maturity is the generalized skill of taking an ambiguous, unfamiliar problem and reasoning it down to an answer. It is built by hard, proof-based study rather than by memorizing formulas, and because real research is open-ended, it acts as the 'master key' that transfers across problems you've never seen.","tag":"skills"},
+    "grit": {"term":"Grit","short":"The stamina to push through genuinely hard, slow work without giving up.","long":"Grit is sustained persistence through difficulty — the proven ability to keep going when a problem is hard and slow, demonstrated by surviving rigorous, proof-based coursework. It is about endurance and resilience, not about counting hours worked or glorifying burnout.","tag":"skills"},
+    "the-vanguard": {"term":"The vanguard","short":"The elite cohort of students already doing ML research, winning competitions, and connected to the labs.","long":"In this course, 'the vanguard' is the small, intense group at the leading edge of the field — undergraduates and PhDs who already publish machine-learning research, win international math and programming competitions, and have connections to the labs. They are the toughest direct competition, which is why the reliable strategy is to build a specific edge skill rather than fight them head-on.","tag":"strategy"}
+  }
+  </script>
+</section>

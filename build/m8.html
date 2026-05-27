@@ -1,0 +1,341 @@
+<section class="module" id="m8" data-num="09" data-title="Scaling Laws & Your Roadmap In" data-level="advanced">
+  <h2>Scaling Laws, and Your Roadmap In</h2>
+  <p class="lead">You've built a real transformer. Now you'll learn the one piece of math that lets labs <em>predict the future</em> — how good a bigger model will be before they spend a fortune training it — and then we close the loop with the exact, do-able plan to turn everything in this course into a job offer. <b>By the end you'll have a checklist you could start tomorrow.</b></p>
+
+  <p>Back in Module 08 you wrote a roughly ten-million-parameter <span data-term="transformer">transformer</span> in JAX that learns to add numbers. You watched its loss — its prediction error — fall as you trained it. Here is a question worth a few hundred million dollars: <em>if you made that model ten times bigger, exactly how much better would it get?</em> If you had to guess blindly, you'd waste enormous compute on runs that don't pay off. The astonishing discovery of the last several years is that you don't have to guess. The improvement follows a smooth, predictable curve. Learning to read that curve is the last technical skill in this course — and the bridge to the capstone challenge that can get you hired.</p>
+
+  <h3><span class="h3-num">9.1</span> Scaling laws — the big idea, from zero</h3>
+
+  <p>A <span data-term="scaling-laws">scaling law</span> is an empirical rule — found by running thousands of experiments and looking at the pattern — that says a model's loss falls in a regular, predictable way as you scale up three resources:</p>
+
+  <ul>
+    <li><strong><span class="var">N</span> — the number of parameters.</strong> Parameters are the model's adjustable numbers (its weights). More parameters means more capacity to store patterns. Your addition transformer had about 10 million; a frontier model has hundreds of billions.</li>
+    <li><strong><span class="var">D</span> — the amount of training data,</strong> measured in <em>tokens</em> (a token is roughly a word-piece — the small chunks of text a model reads). More data means more examples to learn from.</li>
+    <li><strong><span class="var">C</span> — the total compute,</strong> measured in <span data-term="flop">FLOPs</span> (floating-point operations — individual multiplies and adds). This is the raw arithmetic the whole training run burns through.</li>
+  </ul>
+
+  <p>The remarkable empirical finding: when you push any one of these up and plot the resulting loss, you don't get a jagged mess. You get a <strong><span data-term="power-law">power law</span></strong> — a curve that becomes a perfectly straight line when you stretch both axes logarithmically. That straightness is what makes prediction possible.</p>
+
+  <div class="concept"><p class="c-tag">Concept</p><h4>Power law</h4><p>A relationship where one quantity changes as a <em>power</em> of another, like <span class="var">y</span> ∝ <span class="var">x</span><sup>−α</sup>. On ordinary axes it's a swooping curve; on <em>log-log</em> axes (both axes spaced by factors of 10) it becomes a straight line whose steepness is the exponent α. Loss-versus-scale curves are remarkably close to power laws, which is why a few measured points let you draw the whole line.</p></div>
+
+  <p>Written as an equation, a common shape for the loss as you grow the parameter count looks like this:</p>
+
+  <div class="eq"><span class="var">L</span><span class="op">(</span><span class="var">N</span><span class="op">)</span> ≈ <span class="var">a</span> · <span class="var">N</span><sup>−α</sup> + <span class="var">b</span>
+    <span class="eqn-tag">— loss as a power law in model size</span></div>
+
+  <p>Let's read every symbol, because the meaning is more important than the formula. <span class="var">L</span> is the loss (lower is better). <span class="var">N</span> is the number of parameters. The term <span class="var">a</span> · <span class="var">N</span><sup>−α</sup> is the part of the error you can <em>burn away</em> by making the model bigger — as <span class="var">N</span> grows, <span class="var">N</span><sup>−α</sup> shrinks toward zero. The little exponent <span class="var">α</span> (alpha) is how <em>fast</em> it shrinks: a bigger α means scaling pays off faster. And <span class="var">b</span> is a floor — an "irreducible" loss you can never get below no matter how big you go, because language (or addition, or anything) has some inherent unpredictability. The very same shape works with <span class="var">D</span> (data) or <span class="var">C</span> (compute) in place of <span class="var">N</span>.</p>
+
+  <div class="callout analogy"><p class="co-h">Analogy</p><p>Think of studying for an exam. The first hour of study slashes your error a lot; the tenth hour helps less; the hundredth hour barely moves the needle, and there's a floor set by questions no amount of studying can predict. Plot "errors remaining" against "hours studied" and you get a power-law-shaped decay — diminishing but <em>predictable</em> returns. Scaling a model behaves the same way.</p></div>
+
+  <p>Here is why labs care so much that this deserves a place in <em>your</em> toolkit. Because the curve is predictable, a lab can train a handful of small, cheap models, fit the line, and then extrapolate to answer: "if we spend our entire compute budget on one giant run, what loss will we land at?" That single prediction decides what gets built. Scaling laws are, quite literally, how the frontier is planned.</p>
+
+  <figure class="figure"><div class="fig-body">
+    <svg class="diagram" viewBox="0 0 720 380" role="img" aria-label="Loss falling as a straight line versus compute on log-log axes, with small measured runs defining a compute-optimal frontier that extrapolates to a large predicted run">
+      <defs>
+        <marker id="arwM8a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" class="dg-mut" fill="currentColor"/></marker>
+      </defs>
+      <text x="360" y="26" text-anchor="middle" class="dg-title">Loss vs compute (log–log)</text>
+
+      <!-- axes -->
+      <line x1="90" y1="60" x2="90" y2="310" class="dg-line"/>
+      <line x1="90" y1="310" x2="660" y2="310" class="dg-line"/>
+      <text x="48" y="190" text-anchor="middle" class="dg-mut" transform="rotate(-90 48 190)">loss (log)</text>
+      <text x="375" y="345" text-anchor="middle" class="dg-mut">compute C, in FLOPs (log) →</text>
+      <text x="120" y="78" class="dg-mut">low loss = better ↑ smaller</text>
+
+      <!-- the frontier: a straight descending line (power law on log-log) -->
+      <line x1="120" y1="110" x2="640" y2="290" class="dg-edge glow" stroke-width="3"/>
+      <text x="500" y="250" class="dg-ember" style="font-weight:700">compute-optimal frontier</text>
+      <text x="500" y="268" class="dg-mut">a straight line = a power law</text>
+
+      <!-- measured small runs sitting ON the frontier -->
+      <circle cx="160" cy="124" r="6" class="dg-box-accent"/>
+      <circle cx="250" cy="155" r="6" class="dg-box-accent"/>
+      <circle cx="345" cy="188" r="6" class="dg-box-accent"/>
+      <circle cx="440" cy="221" r="6" class="dg-box-accent"/>
+      <text x="150" y="112" class="dg-cyan">small, cheap runs you actually train</text>
+
+      <!-- extrapolated big run -->
+      <circle cx="620" cy="283" r="8" class="dg-box-edge glow"/>
+      <text x="560" y="305" class="dg-ember" style="font-weight:700">predicted big run</text>
+      <path d="M455 226 L612 280" class="dg-dash" marker-end="url(#arwM8a)"/>
+      <text x="470" y="200" class="dg-mut">extrapolate the line →</text>
+    </svg>
+  </div><figcaption class="fig-cap"><b>Figure 1.</b> Train a few small models (cyan dots), fit the straight line through them, and read off where a much larger run will land (ember dot) — <b>before</b> spending the money. The line is the "compute-optimal frontier."</figcaption></figure>
+
+  <div class="quiz">
+    <p class="q-tag">Check your understanding</p>
+    <p class="q-text">What does a scaling law let a lab do?</p>
+    <ul class="q-opts">
+      <li><button class="q-opt" data-correct="false">Guarantee a bigger model will reach exactly zero loss.</button></li>
+      <li><button class="q-opt" data-correct="true">Predict the loss of a large, expensive run by fitting a curve through several small, cheap runs and extrapolating.</button></li>
+      <li><button class="q-opt" data-correct="false">Make training run faster by rewriting the kernels.</button></li>
+    </ul>
+    <div class="q-explain"><b>Why:</b> Scaling laws are about <em>prediction</em>, not speed and not perfection. Because loss falls as a smooth power law in N, D, and C, a few inexpensive points define the line, and you extrapolate to forecast the big run. There's an irreducible floor <span class="var">b</span>, so zero loss is not promised — that's the trap in the first option. Speeding up training is what kernels (option three) do, a different lever entirely.</div>
+  </div>
+
+  <h3><span class="h3-num">9.2</span> Chinchilla: how to spend a compute budget</h3>
+
+  <p>So bigger is better — but bigger how? Here's the subtlety. Compute is roughly the product of <em>model size</em> and <em>data</em>: a useful rule of thumb from transformer math is that training costs about <strong>6 · <span class="var">N</span> · <span class="var">D</span></strong> FLOPs (the "6ND" rule — six FLOPs per parameter per token, since each token's forward and backward pass touches every parameter a few times). That means for a <em>fixed</em> compute budget <span class="var">C</span>, you face a trade-off: spend it on a bigger model (large <span class="var">N</span>, less data) or a smaller model trained on more data (small <span class="var">N</span>, large <span class="var">D</span>)? Get the balance wrong and you waste your whole budget.</p>
+
+  <p>The famous answer is <span data-term="chinchilla">Chinchilla</span>-style <span data-term="compute-optimal">compute-optimal</span> training. The finding: for a fixed compute budget there's a single best split between <span class="var">N</span> and <span class="var">D</span>, and at that optimum you should grow them <em>together</em> — making the model bigger is not free, you must feed it proportionally more tokens. The widely-cited rule of thumb is roughly:</p>
+
+  <div class="eq"><span class="var">D</span> ≈ <span class="num">20</span> · <span class="var">N</span>
+    <span class="eqn-tag">— ~20 training tokens per parameter (approximate heuristic)</span></div>
+
+  <p>In words: a compute-optimal model is trained on roughly twenty tokens for every parameter it has. A 10-billion-parameter model "wants" about 200 billion tokens. Treat the number 20 as a famous ballpark, not a law of physics — the exact ratio depends on the architecture, the data, and how you measure, and different studies land in a range. The <em>idea</em> is what's bankable: <strong>scale model and data in lockstep.</strong></p>
+
+  <div class="callout note"><p class="co-h">Source note</p><p>The scaling-book's published chapters we drew on cover rooflines and transformer FLOP-counting (including the 6ND rule) but do not contain a dedicated Chinchilla chapter. The power-law form and the ~20-tokens-per-parameter heuristic below are widely-cited results presented here as approximate rules of thumb — verify exact exponents and ratios against the primary scaling-law papers before quoting numbers.</p></div>
+
+  <div class="callout warn"><p class="co-h">Watch out</p><p>A very common mistake is "just make the model bigger." A huge model trained on too little data is <em>under-trained</em> — it has capacity it never fills, and a smaller model fed more tokens would have beaten it for the same compute. Bigger is only better when the data grows with it.</p></div>
+
+  <h4>How you'd actually fit such a law</h4>
+
+  <p>This is the empirical recipe, and it's exactly what you'll do by hand in the exercise below:</p>
+
+  <ol>
+    <li><strong>Pick several model sizes</strong> (say 4–6 of them, from small to a bit bigger).</li>
+    <li><strong>Train each one</strong> at one or more compute amounts, recording the <em>total compute spent</em> (≈ 6 · <span class="var">N</span> · <span class="var">D</span>) and the <em>final loss</em>.</li>
+    <li><strong>Plot loss versus compute on log-log axes.</strong> The lower envelope — the best loss achievable at each compute level — is your <strong>frontier</strong> (the line in Figure 1).</li>
+    <li><strong>Fit a straight line</strong> to that frontier. Its slope is the scaling exponent; from it you can read off, for any compute budget, the compute-optimal <span class="var">N</span> and <span class="var">D</span>.</li>
+  </ol>
+
+  <h3><span class="h3-num">9.3</span> The exercise: derive Chinchilla laws for <em>your</em> transformer</h3>
+
+  <p>This is the first half of Vlad's capstone challenge, and it's built directly on Module 08:</p>
+
+  <blockquote class="callout quote">"Derive Chinchilla laws for this; see how they differ for dense vs MoE architectures. Code your solution from scratch in jax by hand if you actually want the learning experience."<cite>— Vladimir Feinberg</cite></blockquote>
+
+  <p>Concretely, here's the do-it-this-weekend version using the addition transformer you already wrote:</p>
+
+  <ul>
+    <li>Take your Module-08 model and make its <em>size</em> a knob — e.g. vary the hidden width or the number of layers to get a handful of models from tiny to several-times-bigger. Count <span class="var">N</span> for each.</li>
+    <li>Train each size and log two numbers per run: total compute (use <span class="var">C</span> ≈ 6 · <span class="var">N</span> · <span class="var">D</span>) and the final loss on a held-out set of addition problems.</li>
+    <li>Plot loss vs compute on log-log axes, fit the frontier line, and read off the compute-optimal frontier — the (<span class="var">N</span>, <span class="var">D</span>) split that gives the lowest loss per FLOP for <em>your</em> task.</li>
+  </ul>
+
+  <p>You now have a scaling law you derived yourself, on a model you built yourself. Here's a tiny sketch of the fitting step — the experiments fill in the data, then a log-log line fit does the rest:</p>
+
+  <div class="code-walk">
+    <div class="cw-bar"><span class="cw-dots"><i></i><i></i><i></i></span><span class="cw-name">fit_scaling_law.py</span><button class="cw-copy">copy</button></div>
+    <pre><code><span class="tok-com"># For each model size you trained, you logged (compute_C, final_loss).</span>
+<span class="tok-kw">import</span> jax.numpy <span class="tok-kw">as</span> jnp
+
+C    = jnp.<span class="tok-fn">array</span>([... per-run total FLOPs ...])   <span class="tok-com"># x values</span>
+loss = jnp.<span class="tok-fn">array</span>([... per-run final loss   ...])   <span class="tok-com"># y values</span>
+
+<span class="tok-com"># A power law L = a * C**(-p) is a STRAIGHT LINE in log-log space:</span>
+<span class="tok-com"># log L = log a  -  p * log C.  So fit a line to the logs.</span>
+x = jnp.<span class="tok-fn">log</span>(C)
+y = jnp.<span class="tok-fn">log</span>(loss)
+slope, intercept = jnp.<span class="tok-fn">polyfit</span>(x, y, <span class="tok-num">1</span>)     <span class="tok-com"># least-squares line</span>
+
+p = -slope                                  <span class="tok-com"># the scaling exponent</span>
+<span class="tok-fn">print</span>(<span class="tok-str">"loss falls like C^(-{:.3f})"</span>.<span class="tok-fn">format</span>(p))</code></pre>
+    <div class="cw-note">The whole "law" is one line fit through your measured points. Real derivations are fancier (they fit N and D separately, weight the frontier carefully, and handle noise), but this captures the heart of it: logs turn a power law into a line, and a line is easy to fit and extrapolate.</div>
+  </div>
+
+  <h3><span class="h3-num">9.4</span> Dense vs MoE — and why the curves differ</h3>
+
+  <p>The exercise says to compare "dense vs MoE." Here's that distinction from zero. Your addition transformer is <strong>dense</strong>: every parameter is used for every single token. Run a token through, and all the weights do work.</p>
+
+  <p>A <span data-term="moe">Mixture of Experts (MoE)</span> model is different. Inside it, certain layers are split into many parallel sub-networks called <em>experts</em>. A small "router" looks at each token and sends it to only a few experts — not all of them. So the model can have a <em>huge</em> total parameter count (lots of experts) while each token only pays for a <em>small</em> number of <strong>active</strong> parameters.</p>
+
+  <div class="callout analogy"><p class="co-h">Analogy</p><p>A dense model is a single generalist doctor who personally handles every patient. An MoE model is a big hospital full of specialists with a triage nurse at the door: each patient is routed to just two relevant specialists. The hospital "knows" far more in total, but any one patient only consumes two specialists' time. Vast total knowledge, small cost per visit.</p></div>
+
+  <p>This is exactly why the scaling-law math differs between dense and MoE. Because compute is tied to <em>active</em> parameters but the model's capacity is tied to <em>total</em> parameters, an MoE model packs more total parameters into each unit of compute. So when you plot loss vs compute, the MoE frontier generally sits in a different place than the dense one — you get more model per FLOP. Deriving both curves and seeing that gap is precisely what Vlad's exercise asks you to observe.</p>
+
+  <div class="callout note"><p class="co-h">Good to know</p><p>Under the hood, an MoE layer is often implemented as a <span data-term="ragged-dot">ragged batched matmul</span>: because different experts receive different numbers of tokens, the per-expert matrices have <em>ragged</em> (uneven) sizes. In JAX this is <code>jax.lax.ragged_dot</code> — it multiplies a stack of inputs against a stack of per-expert weight matrices, told how many tokens go to each group. Hold onto that function name; it's the target of the capstone kernel.</p></div>
+
+  <div class="quiz">
+    <p class="q-tag">Check your understanding</p>
+    <p class="q-text">What makes a Mixture-of-Experts model different from a dense model?</p>
+    <ul class="q-opts">
+      <li><button class="q-opt" data-correct="false">It has fewer total parameters, so it's strictly smaller and cheaper.</button></li>
+      <li><button class="q-opt" data-correct="true">It has many expert sub-networks but routes each token to only a few, so total parameters are huge while active parameters per token stay low.</button></li>
+      <li><button class="q-opt" data-correct="false">It uses every parameter on every token, just in a different order.</button></li>
+    </ul>
+    <div class="q-explain"><b>Why:</b> The defining trick of MoE is <em>routing</em>: many experts exist, but each token activates only a few. That decouples total capacity (large) from per-token compute (small) — which is the whole point, and the reason its scaling curve differs from a dense model's. The last option literally describes a <em>dense</em> model; the first gets the capacity backwards.</div>
+  </div>
+
+  <h3><span class="h3-num">9.5</span> The capstone kernel challenge — fusing the experts</h3>
+
+  <p>Now the second half of the challenge, and the moment this whole course ties together. Recall the big lesson from the kernel module: <span data-term="hbm">HBM</span> (the large but <em>slow</em> memory on the chip) is the bottleneck, and the way to go fast is to keep data in tiny fast on-chip memory and avoid round-trips to HBM. That was the Flash Attention insight. Vlad's capstone asks you to apply the <em>exact same idea</em> to MoE:</p>
+
+  <blockquote class="callout quote">"Assuming you used jax.lax.ragged_dot for the MoE layer; write a pallas kernel that beats ragged dot for F &gt; D by fusing the up/down projections. Find a setting where you notice a measurable forward pass speedup and explain why it's there."<cite>— Vladimir Feinberg</cite></blockquote>
+
+  <p>Let's unpack every piece from zero.</p>
+
+  <p><strong><span data-term="pallas">Pallas</span> is JAX's language for writing your own custom kernels</strong> for GPU and TPU. The official docs put it plainly: <em>"Pallas is an extension to JAX that enables writing custom kernels for GPU and TPU [with] fine-grained control over the generated code."</em> In practice that means <em>you</em> decide what gets loaded into the fast on-chip memory and when — the same hand-control that made a fast attention kernel possible.</p>
+
+  <p><strong>An expert is a small two-layer network</strong> with an <span data-term="up-down-projection">up-projection</span> and a down-projection. The up-projection is a matrix that maps the hidden size <span class="var">D</span> up to a larger intermediate size <span class="var">F</span> (D→F — it "expands"). Then a nonlinear activation is applied. Then the down-projection maps back down, F→D ("contracts"). The intermediate of size <span class="var">F</span> is the <em>big</em> thing in the middle, and the challenge specifically targets the case <strong><span class="var">F</span> &gt; <span class="var">D</span></strong> — when that middle is larger than the input.</p>
+
+  <p><strong>The fusion idea is the Flash Attention lesson again, exactly.</strong> Done naively, you compute the big D→F intermediate, write all <span class="var">F</span> of its numbers out to slow HBM, then read them back in to do the F→D step. Because <span class="var">F</span> &gt; <span class="var">D</span>, that intermediate is the <em>largest</em> array in the whole operation — so writing and re-reading it is the dominant cost in memory traffic. By <strong>fusing</strong> both projections into one Pallas kernel, the intermediate is born, activated, and consumed entirely in fast on-chip memory; only the small <span class="var">D</span>-sized output ever touches HBM. You delete the round-trip of the biggest array. That's the speedup — and it grows precisely when <span class="var">F</span> &gt; <span class="var">D</span>.</p>
+
+  <div class="callout key"><p class="co-h">Key idea — it's Flash Attention, again</p><p>The same principle keeps paying off across the whole stack: <strong>don't round-trip large intermediates through HBM; fuse the steps so the big array stays on-chip.</strong> Flash Attention applied it to the attention scores. The fused MoE kernel applies it to the F-sized expert intermediate. Spot this pattern once and you'll see it everywhere a lab needs faster kernels — which is exactly the rare skill that gets you hired.</p></div>
+
+  <figure class="figure"><div class="fig-body">
+    <svg class="diagram" viewBox="0 0 720 400" role="img" aria-label="Unfused path writes the large F-sized intermediate to HBM and reads it back, while the fused path keeps it on-chip and writes only the small D-sized output">
+      <defs>
+        <marker id="arwM8b" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" class="dg-mut" fill="currentColor"/></marker>
+      </defs>
+      <text x="360" y="24" text-anchor="middle" class="dg-title">Unfused vs fused expert (F &gt; D)</text>
+
+      <!-- UNFUSED (top) -->
+      <text x="60" y="58" class="dg-mut" style="font-weight:700">UNFUSED — big intermediate round-trips to HBM</text>
+      <rect x="40" y="70" width="92" height="48" rx="9" class="dg-box"/>
+      <text x="86" y="99" text-anchor="middle" class="dg-label">in (D)</text>
+      <rect x="172" y="70" width="120" height="48" rx="9" class="dg-box"/>
+      <text x="232" y="92" text-anchor="middle" class="dg-label">up-proj</text>
+      <text x="232" y="108" text-anchor="middle" class="dg-mut">D→F</text>
+      <!-- HBM round trip of F -->
+      <rect x="332" y="64" width="120" height="60" rx="9" class="dg-box-edge glow"/>
+      <text x="392" y="88" text-anchor="middle" class="dg-ember" style="font-weight:700">F-sized</text>
+      <text x="392" y="105" text-anchor="middle" class="dg-ember">→ HBM → back</text>
+      <rect x="492" y="70" width="120" height="48" rx="9" class="dg-box"/>
+      <text x="552" y="92" text-anchor="middle" class="dg-label">down-proj</text>
+      <text x="552" y="108" text-anchor="middle" class="dg-mut">F→D</text>
+      <rect x="652" y="70" width="48" height="48" rx="9" class="dg-box"/>
+      <text x="676" y="99" text-anchor="middle" class="dg-label">D</text>
+      <line x1="132" y1="94" x2="170" y2="94" class="dg-arrow" marker-end="url(#arwM8b)"/>
+      <line x1="292" y1="94" x2="330" y2="94" class="dg-arrow" marker-end="url(#arwM8b)"/>
+      <line x1="452" y1="94" x2="490" y2="94" class="dg-arrow" marker-end="url(#arwM8b)"/>
+      <line x1="612" y1="94" x2="650" y2="94" class="dg-arrow" marker-end="url(#arwM8b)"/>
+      <text x="392" y="142" text-anchor="middle" class="dg-ember">the big array makes a slow trip ✗</text>
+
+      <line x1="40" y1="178" x2="700" y2="178" class="dg-dash"/>
+
+      <!-- FUSED (bottom) -->
+      <text x="60" y="214" class="dg-mut" style="font-weight:700">FUSED — F stays on-chip, only D-output to HBM</text>
+      <rect x="40" y="232" width="92" height="48" rx="9" class="dg-box"/>
+      <text x="86" y="261" text-anchor="middle" class="dg-label">in (D)</text>
+      <!-- one on-chip kernel box -->
+      <rect x="172" y="222" width="380" height="120" rx="12" class="dg-box-accent"/>
+      <text x="362" y="246" text-anchor="middle" class="dg-cyan" style="font-weight:700">one Pallas kernel — on-chip (SRAM/VMEM)</text>
+      <rect x="196" y="262" width="100" height="60" rx="8" class="dg-box"/>
+      <text x="246" y="289" text-anchor="middle" class="dg-label">D→F</text>
+      <text x="246" y="306" text-anchor="middle" class="dg-mut">up</text>
+      <rect x="312" y="262" width="100" height="60" rx="8" class="dg-box"/>
+      <text x="362" y="289" text-anchor="middle" class="dg-label">act(·)</text>
+      <text x="362" y="306" text-anchor="middle" class="dg-mut">F here</text>
+      <rect x="428" y="262" width="100" height="60" rx="8" class="dg-box"/>
+      <text x="478" y="289" text-anchor="middle" class="dg-label">F→D</text>
+      <text x="478" y="306" text-anchor="middle" class="dg-mut">down</text>
+      <rect x="592" y="232" width="48" height="48" rx="9" class="dg-box"/>
+      <text x="616" y="261" text-anchor="middle" class="dg-label">D</text>
+      <line x1="132" y1="256" x2="170" y2="256" class="dg-arrow" marker-end="url(#arwM8b)"/>
+      <line x1="296" y1="292" x2="310" y2="292" class="dg-arrow" marker-end="url(#arwM8b)"/>
+      <line x1="412" y1="292" x2="426" y2="292" class="dg-arrow" marker-end="url(#arwM8b)"/>
+      <path d="M530 270 L590 256" class="dg-arrow" marker-end="url(#arwM8b)"/>
+      <text x="362" y="370" text-anchor="middle" class="dg-cyan">F never leaves fast memory — only D goes to HBM ✓</text>
+    </svg>
+  </div><figcaption class="fig-cap"><b>Figure 2.</b> Same shape as the Flash Attention diagram: the unfused path (top) writes the large F-sized intermediate to <span data-term="hbm">HBM</span> and reads it back; the fused kernel (bottom) keeps F entirely on-chip and writes only the small D-sized output. When F &gt; D, that deleted round-trip is where the speedup lives.</figcaption></figure>
+
+  <p>Here is a clearly-marked <em>sketch</em> of the fused kernel's structure. It is illustrative pseudocode for the shape of the solution — not a drop-in, benchmarked kernel — so you can see how the pieces sit together:</p>
+
+  <div class="code-walk">
+    <div class="cw-bar"><span class="cw-dots"><i></i><i></i><i></i></span><span class="cw-name">fused_expert_kernel.py</span><button class="cw-copy">copy</button></div>
+    <pre><code><span class="tok-com"># sketch — illustrative structure only, not a tuned/benchmarked kernel.</span>
+<span class="tok-com"># Goal: fuse up-proj (D-&gt;F) and down-proj (F-&gt;D) so the big F-sized</span>
+<span class="tok-com"># intermediate stays on-chip and never round-trips to HBM. Case: F &gt; D.</span>
+<span class="tok-kw">import</span> jax, jax.numpy <span class="tok-kw">as</span> jnp
+<span class="tok-kw">from</span> jax.experimental <span class="tok-kw">import</span> pallas <span class="tok-kw">as</span> pl
+
+<span class="tok-kw">def</span> <span class="tok-fn">fused_expert_kernel</span>(x_ref, w_up_ref, w_dn_ref, out_ref):
+    <span class="tok-com"># Each kernel instance handles ONE block of rows (tokens).</span>
+    x  = x_ref[...]                  <span class="tok-com"># load a block of inputs  (block, D) -&gt; on-chip</span>
+    wu = w_up_ref[...]               <span class="tok-com"># load up weights         (D, F)     -&gt; on-chip</span>
+    wd = w_dn_ref[...]               <span class="tok-com"># load down weights       (F, D)     -&gt; on-chip</span>
+
+    h = jnp.<span class="tok-fn">dot</span>(x, wu)             <span class="tok-com"># up-project: (block, F)  -- the BIG one, stays on-chip</span>
+    h = jax.nn.<span class="tok-fn">gelu</span>(h)            <span class="tok-com"># activation, in place, still on-chip</span>
+    y = jnp.<span class="tok-fn">dot</span>(h, wd)             <span class="tok-com"># down-project: (block, D) -- small again</span>
+
+    out_ref[...] = y                 <span class="tok-com"># write ONLY the D-sized output back to HBM</span>
+
+<span class="tok-kw">def</span> <span class="tok-fn">fused_expert</span>(x, w_up, w_dn):
+    <span class="tok-kw">return</span> pl.<span class="tok-fn">pallas_call</span>(
+        fused_expert_kernel,
+        grid=(x.shape[<span class="tok-num">0</span>] // BLOCK,),      <span class="tok-com"># tile over rows/tokens</span>
+        out_shape=jax.<span class="tok-fn">ShapeDtypeStruct</span>(x.shape, x.dtype),
+    )(x, w_up, w_dn)
+<span class="tok-com"># vs jax.lax.ragged_dot used twice (D-&gt;F, then F-&gt;D): two calls means the</span>
+<span class="tok-com"># F-sized intermediate is written to HBM and read back. Fusing removes that.</span></code></pre>
+    <div class="cw-note">Read the comments top-to-bottom: load a block of tokens and both weight matrices into fast memory, compute up → activation → down without ever materializing the F-sized <code>h</code> in HBM, and write back only the D-sized result. A real submission would extend this to the ragged/per-expert MoE case, tile <span class="var">F</span> if it's too big to fit on-chip at once, and tune block sizes — then <em>measure</em> a forward-pass speedup against two <code>ragged_dot</code> calls and explain it by the HBM traffic you removed.</div>
+  </div>
+
+  <div class="callout warn"><p class="co-h">Watch out</p><p>Fusion isn't a free win in every setting — the brief is specific for a reason. The benefit shows up when <span class="var">F</span> &gt; <span class="var">D</span> (so the avoided intermediate is genuinely the biggest array) and when you're memory-traffic-bound. If <span class="var">F</span> is enormous it may not fit on-chip and you'll need to tile it; if the operation is already compute-bound, removing HBM traffic won't help. <em>Finding the regime where it does help, and explaining why, is the actual exercise.</em> Don't claim a speedup you haven't measured.</p></div>
+
+  <div class="quiz">
+    <p class="q-tag">Check your understanding</p>
+    <p class="q-text">Why does fusing the up- and down-projections into one kernel make the forward pass faster when F &gt; D?</p>
+    <ul class="q-opts">
+      <li><button class="q-opt" data-correct="false">Fusing reduces the total number of multiply-add FLOPs the math requires.</button></li>
+      <li><button class="q-opt" data-correct="true">The large F-sized intermediate stays in fast on-chip memory instead of being written to slow HBM and read back; only the small D-sized output round-trips.</button></li>
+      <li><button class="q-opt" data-correct="false">Fusing switches the model from MoE to dense, which is always faster.</button></li>
+    </ul>
+    <div class="q-explain"><b>Why:</b> This is the Flash Attention lesson again: the arithmetic (the FLOPs) is essentially unchanged — what you save is <em>memory traffic</em>. Unfused, the F-sized intermediate makes a slow round-trip to HBM; fused, it lives and dies on-chip and only the D-sized output is written out. That's why the win grows when F &gt; D. Option one misattributes the gain to FLOPs; option three is unrelated to fusion.</div>
+  </div>
+
+  <h3><span class="h3-num">9.6</span> How to <em>actually</em> get hired — the payoff</h3>
+
+  <p>You now have, in your hands, everything the essay's capstone asks for. Vlad makes a concrete, self-consistent offer for how to convert it into an interview. It's unusually do-able, and it goes like this:</p>
+
+  <ul>
+    <li><strong>Record yourself doing the work.</strong> Sit down with the scaling book and do its exercises with paper and pencil, on camera. Screen-record yourself writing the transformer from scratch and deriving the Chinchilla laws (dense and MoE) in JAX, by hand.</li>
+    <li><strong>Write it up.</strong> Produce a short scaling-law report — your plots, your fitted frontier, what you found about dense vs MoE — plus the exercise writeup.</li>
+    <li><strong>Email it to him.</strong> He's hiring in NYC, and to keep it honest he may ask you for a random subset of your video — proof you actually did the thinking yourself, not an AI.</li>
+  </ul>
+
+  <p>That last detail is the whole spirit of the course made literal. (Remember Module 00's warning about the "AI trap"? This is why it matters: the skill has to live in <em>your</em> head.) The work itself is the application. No referral, no gatekeeper — just the artifact.</p>
+
+  <p>But read the next part carefully, because it's the honest caveat that makes the whole offer trustworthy:</p>
+
+  <blockquote class="callout quote">"Doing the couple of exercises above is a good start, but it's not a short circuit … However, it sets you up for the skills … that might end you up with a public github repo demonstrating something useful and adopted widely by the industry. After that, you get to pick where you want to work."<cite>— Vladimir Feinberg</cite></blockquote>
+
+  <div class="callout warn"><p class="co-h">Watch out — a start, not a short-circuit</p><p>These exercises are <strong>not</strong> a magic bypass around the years of signaling the traditional path provides — the hard classes, the reps, the demonstrated grit from Module 00. Don't mistake one weekend's writeup for a finished career. What it <em>is</em>: the on-ramp. It builds the exact skills that let you go build a <em>public, widely-adopted artifact</em> — and that artifact is the thing that flips the table.</p></div>
+
+  <div class="callout key"><p class="co-h">Key idea — the artifact flips the table</p><p>When you have a public GitHub repo that does something genuinely useful and the industry actually adopts it, you've made the loudest possible proof of the "one specific, valuable skill" from Module 00. At that point you stop chasing labs. In Vlad's words, <strong>"you get to pick where you want to work."</strong> That is the destination this entire course has been climbing toward.</p></div>
+
+  <div class="quiz">
+    <p class="q-tag">Check your understanding</p>
+    <p class="q-text">How does Vlad frame doing these exercises relative to the traditional path?</p>
+    <ul class="q-opts">
+      <li><button class="q-opt" data-correct="false">As a guaranteed short-circuit that replaces years of study and signaling.</button></li>
+      <li><button class="q-opt" data-correct="true">As a great <em>start</em> — not a bypass — that sets up the skills to build a widely-adopted public repo, after which you can pick where to work.</button></li>
+      <li><button class="q-opt" data-correct="false">As busywork that doesn't matter unless you already have a PhD.</button></li>
+    </ul>
+    <div class="q-explain"><b>Why:</b> Vlad is explicit that it's "a good start, but not a short circuit." The exercises build real skill and lead toward a public, adopted artifact — and <em>that</em> is what earns you your pick of employers. The first option ignores his caveat; the third dismisses work he calls a genuine start that's open to anyone willing to do it.</div>
+  </div>
+
+  <h3><span class="h3-num">9.7</span> The whole journey, on one page</h3>
+
+  <p>Step back and look at the climb you've made. You started knowing nothing — not what a GPU does, not what a model is. You now understand transformers and attention, FLOPs and HBM, kernels and fusion, the roofline, quantization, agentic loops; you've <em>built</em> a transformer in JAX; and you can derive a scaling law and explain a fused MoE kernel. That is not a beginner's toolkit. That is the start of a frontier-lab toolkit. Here is the path, start to finish, as one checklist you can act on:</p>
+
+  <div class="checkpoint"><p class="cp-h">✓ Your roadmap in — the whole course as one path</p>
+  <ol>
+    <li><strong>Foundations.</strong> Lock in how an LLM works — tokens, transformers, attention, FLOPs, HBM, the roofline. (Modules 00–06.)</li>
+    <li><strong>Pick an edge.</strong> Choose <em>one</em>: kernels (below the model — make it run fast) or agents (above the model — put it to work). Don't try to do both at once. (Module 03's thesis.)</li>
+    <li><strong>Study the canonical work.</strong> Go deep on the standard references for your edge — the scaling book, Flash Attention, the Chinchilla-style scaling results. Understand <em>why</em>, not just <em>what</em>.</li>
+    <li><strong>Build &amp; benchmark something real.</strong> Write it from scratch in JAX, by hand. Derive your transformer's scaling laws; write a Pallas kernel that beats <code>ragged_dot</code> for F &gt; D; <em>measure</em> the speedup and explain it. (Modules 08–09.)</li>
+    <li><strong>Publish it.</strong> Put a clean, useful artifact on public GitHub — a kernel, a tool, a reproducible study. Make it the kind of thing other people actually use.</li>
+    <li><strong>Reach out.</strong> Send your scaling-law report and writeup to someone hiring (Vlad invites exactly this). Let the work be the application.</li>
+  </ol>
+  <p style="margin-top:.6rem">Then: keep digging where you found gold, re-aim every six months — and when your repo is adopted widely, <strong>you get to pick where you want to work.</strong></p>
+  </div>
+
+  <p>That's the plan. It's concrete, it's open to anyone willing to do the work, and you now have the skills to take the next step. The most important rung is the next one — so this weekend, open your Module-08 code, vary the model size, and fit your first scaling law. Then keep going. The frontier is closer than it looks, and you've already started climbing. Go build something the industry can't ignore.</p>
+
+  <script type="application/json" class="glossary-add">
+  {
+    "scaling-laws": {"term":"Scaling laws","short":"Empirical rules: a model's loss falls as a smooth power law as you grow parameters (N), data (D), and compute (C).","long":"Scaling laws are experimentally-found relationships showing that a model's loss decreases predictably — as a power law — when you increase the number of parameters, the amount of training data, or the total compute. Because the curves are smooth, labs fit them on small runs and extrapolate to forecast large, expensive runs before training them.","tag":"scaling"},
+    "power-law": {"term":"Power law","short":"A relationship y ∝ x^(−α) that becomes a straight line on log-log axes; the form scaling laws take.","long":"A power law is a relationship in which one quantity varies as a power of another. On axes spaced logarithmically (log-log) it appears as a straight line whose slope is the exponent. Loss-versus-scale curves are close to power laws, which is what lets a few measured points define the whole line.","tag":"scaling"},
+    "chinchilla": {"term":"Chinchilla / compute-optimal scaling","short":"The finding that for a fixed compute budget you must grow model size and data together (~20 tokens per parameter, approx).","long":"Chinchilla-style scaling refers to the well-known result that, for a fixed compute budget, there is an optimal balance between model size (N) and training tokens (D), and that the two should be scaled in lockstep — roughly 20 tokens per parameter as a widely-cited rule of thumb. Under-feeding a large model wastes compute.","tag":"scaling"},
+    "compute-optimal": {"term":"Compute-optimal training","short":"Choosing the (N, D) split that gives the lowest loss for a fixed compute budget C.","long":"A training run is compute-optimal when, for its fixed compute budget, the number of parameters N and number of tokens D are chosen to minimize the final loss. You find it empirically by training several sizes, plotting loss vs compute on log-log axes, and fitting the lower-envelope frontier.","tag":"scaling"},
+    "moe": {"term":"Mixture of Experts (MoE)","short":"A model with many expert sub-networks that routes each token to only a few, so total params are huge but active params per token are small.","long":"A Mixture-of-Experts model replaces some layers with many parallel 'expert' sub-networks plus a router that sends each token to only a few of them. This decouples total capacity (large) from per-token compute (small), which changes its scaling-law curve relative to a dense model that uses every parameter on every token.","tag":"architecture"},
+    "ragged-dot": {"term":"Ragged dot (jax.lax.ragged_dot)","short":"A JAX op that multiplies inputs against a stack of per-expert weight matrices with variable group sizes — used for MoE layers.","long":"jax.lax.ragged_dot performs a grouped/ragged matrix multiplication: lhs (m,k) against rhs (g,k,n) split by a group_sizes (g,) array, giving (m,n). Because MoE experts receive different numbers of tokens, the per-expert matmuls are 'ragged,' making this the natural primitive for an MoE layer.","tag":"jax"},
+    "pallas": {"term":"Pallas","short":"JAX's extension for writing custom GPU/TPU kernels with fine-grained control over on-chip memory.","long":"Pallas is an extension to JAX that lets you write custom kernels for GPU and TPU, giving fine-grained control over the generated code while keeping JAX's jax.numpy ergonomics. It lets you decide what is loaded into fast on-chip memory — the control needed to fuse operations and avoid HBM round-trips.","tag":"jax"},
+    "up-down-projection": {"term":"Up- / down-projection","short":"An expert MLP's two matrices: up (D→F, expands to a larger intermediate) then down (F→D, contracts back).","long":"Inside a transformer MLP (and each MoE expert) the up-projection maps the hidden size D up to a larger intermediate size F, an activation is applied, then the down-projection maps F back down to D. When F > D the intermediate is the largest array, which is why fusing the two projections to keep it on-chip saves the most memory traffic.","tag":"architecture"}
+  }
+  </script>
+</section>

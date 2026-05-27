@@ -1,0 +1,264 @@
+<section class="module" id="m4" data-num="05" data-title="Kernel Work II — The Flash Attention Trick" data-level="advanced">
+  <h2>Kernel Work II — The Flash Attention Trick</h2>
+  <p class="lead">This is the story the whole essay has been building toward: a single, famous speedup that made long-context models practical — and that didn't change the math one bit. <b>By the end you'll understand <em>why</em> it works, and, more importantly, the way of thinking that produced it — the exact way of thinking frontier labs hire for.</b></p>
+
+  <p>You already know the pieces. You know <span data-term="attention">attention</span> and its formula. You know a <span data-term="gpu">GPU</span> has two kinds of memory: a big, slow pool called <span data-term="hbm">HBM</span>, and a tiny, blazing-fast scratchpad on the chip called <span data-term="sram">SRAM</span>. You know that moving data between them costs <em>bandwidth</em>, and that a computation can be <span data-term="memory-bound">memory-bound</span> — limited not by how fast the chip can do arithmetic, but by how fast it can shuttle numbers in and out. And you know that a <span data-term="kernel">kernel</span> is the low-level code that actually runs a piece of the model on the chip, and that <span data-term="fusion">fusing</span> kernels means doing several steps in one pass to avoid extra trips to slow memory.</p>
+
+  <p>Now we put all of it together on one operation — attention — and watch a beautiful idea fall out. This module is the essay's flagship example of what the author calls <strong>lateral systems thinking</strong>: solving a problem not by attacking it head-on, but by stepping back and noticing a constraint nobody was looking at.</p>
+
+  <h3><span class="h3-num">5.1</span> A quick reminder of what attention computes</h3>
+
+  <p>For a sequence of <span class="var">N</span> tokens (think: <span class="var">N</span> words in the prompt), attention lets every token look at every other token and decide how much to "pay attention" to each one. The formula you've already met is:</p>
+
+  <div class="eq">Attention(<span class="var">Q, K, V</span>) = softmax<span class="op">(</span>
+    <span class="frac"><span class="fn"><span class="var">Q K</span><sup>⊤</sup></span><span class="fd">√<span class="var">d</span><sub>k</sub></span></span>
+    <span class="op">)</span> <span class="var">V</span>
+    <span class="eqn-tag">— scaled dot-product attention</span></div>
+
+  <p>Read it left to right as three steps. First, <span class="var">Q K</span><sup>⊤</sup> — multiply the <em>queries</em> by the <em>keys</em> — produces a giant table of raw "match scores," one number for every pair of tokens. With <span class="var">N</span> tokens, that table is <span class="var">N</span> × <span class="var">N</span>. Second, <span data-term="softmax">softmax</span> turns each row of scores into clean weights that add up to 1 (so each token has a tidy "budget of attention" to spend). Third, those weights multiply the <em>values</em> <span class="var">V</span> to produce the output. The √<span class="var">d</span><sub>k</sub> on the bottom is just a scaling constant that keeps the numbers from blowing up; you can ignore it for the intuition.</p>
+
+  <div class="callout analogy"><p class="co-h">Analogy</p><p>Imagine a classroom of <span class="var">N</span> students. Every student asks every other student "how relevant are you to me?" — that's the <span class="var">N</span> × <span class="var">N</span> table of scores. Each student then normalizes their answers into percentages (softmax), and finally takes a weighted blend of everyone's notes (the values). Attention is just "everyone consults everyone, weighted by relevance."</p></div>
+
+  <p>The thing to fix in your mind: that middle table is <span class="var">N</span> × <span class="var">N</span>. If your prompt has 1,000 tokens, that's a million numbers. At 100,000 tokens — ordinary for a modern long-context model — it's <strong>ten billion</strong> numbers, for a single attention layer, of which there are dozens. The size of that table grows with the <em>square</em> of the sequence length. Hold that thought; it's the whole problem.</p>
+
+  <h3><span class="h3-num">5.2</span> The "unfused" way — and where it bleeds time</h3>
+
+  <p>The most natural way to write attention is to follow the formula literally, one step at a time, like transcribing sheet music note for note. Compute the whole score table; store it. Run softmax over it; store the result. Multiply by <span class="var">V</span>. Each "store" and each "read back" happens in the only place big enough to hold that <span class="var">N</span> × <span class="var">N</span> table: slow <span data-term="hbm">HBM</span>. We call this the <strong>unfused</strong> implementation, because each step is its own separate kernel that hands off to the next through main memory.</p>
+
+  <p>Let's count the trips to slow memory — the round-trips — because that's what will hurt:</p>
+
+  <ul>
+    <li>Compute <span class="var">Q K</span><sup>⊤</sup> → <strong>write</strong> the <span class="var">N</span> × <span class="var">N</span> scores to HBM.</li>
+    <li><strong>Read</strong> the scores back from HBM → run softmax → <strong>write</strong> the softmaxed table back to HBM.</li>
+    <li><strong>Read</strong> the table back again → multiply by <span class="var">V</span> → write the (much smaller) output.</li>
+  </ul>
+
+  <p>That enormous table makes the trip across the slow bus several times. And here's the cruel part: the actual arithmetic on each number is trivial — a multiply here, an exponential there. The chip's math units finish almost instantly and then sit idle, <em>waiting</em> for the next slab of the table to arrive from HBM. The operation is badly <span data-term="memory-bound">memory-bound</span>. The bottleneck isn't computing the scores; it's hauling them back and forth.</p>
+
+  <figure class="figure"><div class="fig-body">
+    <svg class="diagram" viewBox="0 0 720 330" role="img" aria-label="Unfused attention: queries and keys produce a huge N by N score matrix that is written to slow HBM, read back for softmax, written again, and read again for the value multiply, with every round-trip crossing the slow memory bus">
+      <defs>
+        <marker id="arwM4a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" class="dg-mut" fill="currentColor"/></marker>
+      </defs>
+      <text x="360" y="24" text-anchor="middle" class="dg-title">UNFUSED attention — the N×N table lives in slow HBM</text>
+
+      <!-- On-chip compute strip -->
+      <rect x="28" y="52" width="664" height="96" rx="12" class="dg-box"/>
+      <text x="44" y="74" class="dg-mut">on-chip compute (fast)</text>
+      <rect x="52" y="86" width="120" height="46" rx="8" class="dg-box"/>
+      <text x="112" y="114" text-anchor="middle" class="dg-label">Q · Kᵀ</text>
+      <rect x="300" y="86" width="120" height="46" rx="8" class="dg-box"/>
+      <text x="360" y="114" text-anchor="middle" class="dg-label">softmax</text>
+      <rect x="548" y="86" width="120" height="46" rx="8" class="dg-box"/>
+      <text x="608" y="114" text-anchor="middle" class="dg-label">× V</text>
+
+      <!-- HBM band holding the big matrix -->
+      <rect x="28" y="206" width="664" height="100" rx="12" class="dg-box-edge"/>
+      <text x="44" y="228" class="dg-ember" style="font-weight:700">slow HBM</text>
+      <rect x="250" y="238" width="220" height="52" rx="8" class="dg-box"/>
+      <text x="360" y="262" text-anchor="middle" class="dg-ember" style="font-weight:700">huge N×N scores</text>
+      <text x="360" y="280" text-anchor="middle" class="dg-mut">materialized in full</text>
+
+      <!-- round trips: write down, read up, etc. -->
+      <line x1="112" y1="134" x2="300" y2="246" class="dg-arrow" marker-end="url(#arwM4a)"/>
+      <text x="150" y="196" class="dg-ember">write ↓</text>
+      <line x1="320" y1="238" x2="332" y2="134" class="dg-arrow" marker-end="url(#arwM4a)"/>
+      <text x="300" y="196" class="dg-ember">read ↑</text>
+      <line x1="392" y1="134" x2="408" y2="238" class="dg-arrow" marker-end="url(#arwM4a)"/>
+      <text x="404" y="196" class="dg-ember">write ↓</text>
+      <line x1="450" y1="238" x2="588" y2="134" class="dg-arrow" marker-end="url(#arwM4a)"/>
+      <text x="520" y="196" class="dg-ember">read ↑</text>
+
+      <text x="360" y="322" text-anchor="middle" class="dg-mut">every red arrow crosses the slow bus — and the table is enormous</text>
+    </svg>
+  </div><figcaption class="fig-cap"><b>Figure 1.</b> The unfused path. Watch the four ember arrows: the giant <span class="var">N</span>×<span class="var">N</span> score table is written to HBM and read back twice. Those round-trips, not the arithmetic, dominate the time.</figcaption></figure>
+
+  <h3><span class="h3-num">5.3</span> The FLOP-only fallacy</h3>
+
+  <p>Now here is the trap — and it's the heart of what the essay is teaching. Suppose your mental model of the hardware only counts <span data-term="flop">FLOPs</span>: floating-point operations, the raw arithmetic. By that measure, the unfused implementation looks completely fine. It does exactly the multiplies and exponentials the formula calls for — not one extra. It is, in the author's phrase, "a direct transcription of attention math." A FLOP-counter sees no waste at all.</p>
+
+  <blockquote class="callout quote">"Modelling flops alone might steer one to believe that the unfused attention implementation that is a direct transcription of attention math might come about."<cite>— Vladimir Feinberg</cite></blockquote>
+
+  <p>So a smart engineer armed only with a FLOP model, told "attention is too slow on long sequences," reaches a reasonable-but-wrong conclusion: <em>the math itself must be too expensive</em>. And then they go try to change the math. They invent <strong>sparse attention</strong> (let each token look at only some others, not all) or <strong>approximate attention</strong> (estimate the score table instead of computing it exactly). These are real research areas, and sometimes they help. But they come at a cost: you've now changed what the model computes, so you have to worry about whether quality drops. People have spent years — and mountains of GPU-hours — chasing approximations to a problem that, it turns out, wasn't fundamentally about the arithmetic at all.</p>
+
+  <div class="callout key"><p class="co-h">Key idea — the FLOP-only fallacy</p><p>If your model of the machine counts <strong>only arithmetic</strong>, the most wasteful real-world implementation can look perfectly efficient. The fix is almost never to optimize harder inside the wrong model. The fix is to <strong>add the missing variable</strong> — here, <span data-term="memory-bound">memory bandwidth</span> — so the real bottleneck finally shows up on your dashboard.</p></div>
+
+  <p>This is the move. Don't change the math. <strong>Change the model of the hardware.</strong> Once memory bandwidth is in the picture, the problem looks utterly different — and a far better answer is sitting right there.</p>
+
+  <blockquote class="callout quote">"By considering a new variable … such as memory bandwidth, we realize that the operation can be restructured to avoid materializing intermediate values in slow HBM memory."<cite>— Vladimir Feinberg</cite></blockquote>
+
+  <div class="quiz">
+    <p class="q-tag">Check your understanding</p>
+    <p class="q-text">In the unfused attention implementation, what is actually wasting most of the time?</p>
+    <ul class="q-opts">
+      <li><button class="q-opt" data-correct="false">The model does far too many multiply-and-add operations; the arithmetic is the bottleneck.</button></li>
+      <li><button class="q-opt" data-correct="true">The giant N×N score table is written to slow HBM and read back several times; those memory round-trips dominate while the math units sit idle.</button></li>
+      <li><button class="q-opt" data-correct="false">The GPU runs out of arithmetic units and has to queue the operations one at a time.</button></li>
+    </ul>
+    <div class="q-explain"><b>Why:</b> The arithmetic per number is tiny and finishes fast — that's exactly why a FLOP-only model is fooled. The real cost is bandwidth: shuttling the enormous score table in and out of HBM. The operation is memory-bound, so the chip spends its time <em>waiting</em>, not computing.</div>
+  </div>
+
+  <h3><span class="h3-num">5.4</span> The Flash Attention trick</h3>
+
+  <p>Once you accept that the bottleneck is moving the <span class="var">N</span> × <span class="var">N</span> table in and out of HBM, the cure writes itself: <strong>never build the whole table in HBM at all.</strong> This is the idea behind <span data-term="flash-attention">FlashAttention</span>. The math it computes is <em>identical</em> to before — same formula, same output, to the last decimal. What changes is the <em>order of operations</em> and <em>where the intermediates live.</em></p>
+
+  <p>The technique rests on two simple moves.</p>
+
+  <p><strong>Move 1 — work in tiles.</strong> Instead of computing the full score table at once, chop the queries into small blocks and the keys/values into small blocks. Now process one little block of queries against one little block of keys at a time. Each block is small enough to fit entirely inside the fast on-chip <span data-term="sram">SRAM</span> scratchpad. You load a query tile and a key/value tile up to SRAM, do all the multiplying and softmaxing for that little patch right there on the chip where it's fast, and you <strong>never write that patch of scores out to HBM.</strong> This block-by-block strategy is called <span data-term="tiling">tiling</span>.</p>
+
+  <p><strong>Move 2 — combine tiles with an online softmax.</strong> There's an obvious objection: softmax needs a whole row of scores to normalize it (every percentage has to know the total). If you only ever see one tile of a row at a time, how can you possibly softmax it correctly? The answer is a clever piece of bookkeeping called the <span data-term="online-softmax">online softmax</span>: as each new tile arrives, you keep a <em>running maximum</em> and a <em>running sum</em>, and you gently rescale the partial result you've accumulated so far. When the last tile has gone by, the running totals make the answer come out <em>exactly</em> as if you'd seen the whole row at once. It's the same trick as keeping a running average as numbers stream past, rather than waiting to collect them all first.</p>
+
+  <div class="callout analogy"><p class="co-h">Analogy</p><p>Imagine grading a giant stack of exams to find each student's share of the total points — but your desk only fits a few papers at a time. Instead of laying all thousand exams out at once (you have no room), you process a handful, keep a running tally of the highest score seen and the total so far, and adjust as you go. At the end your tallies are exactly right. The online softmax is that running tally — it lets a small desk (SRAM) do a job that looks like it needs a huge table.</p></div>
+
+  <div class="callout key"><p class="co-h">Key idea — same math, fewer trips</p><p>FlashAttention is <strong>not</strong> an approximation. It computes the <em>exact</em> attention output. The only thing it changes is that the giant intermediate table is never <span data-term="materialization">materialized</span> in slow HBM — it's produced and consumed in small tiles inside fast SRAM, and only the final, small output is written back. Same answer, a fraction of the bandwidth, a big speedup.</p></div>
+
+  <figure class="figure"><div class="fig-body">
+    <svg class="diagram" viewBox="0 0 720 340" role="img" aria-label="Fused tiled attention: small blocks of queries and keys/values are streamed from HBM into fast on-chip SRAM, where partial attention is computed and combined with a running online softmax, and only the final small output is written back to HBM">
+      <defs>
+        <marker id="arwM4b" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" class="dg-mut" fill="currentColor"/></marker>
+      </defs>
+      <text x="360" y="24" text-anchor="middle" class="dg-title">FUSED / tiled — the N×N table never touches HBM</text>
+
+      <!-- HBM at left: only inputs and final output -->
+      <rect x="24" y="54" width="150" height="240" rx="12" class="dg-box"/>
+      <text x="99" y="76" text-anchor="middle" class="dg-mut">slow HBM</text>
+      <rect x="44" y="92" width="110" height="40" rx="8" class="dg-box"/>
+      <text x="99" y="117" text-anchor="middle" class="dg-label">Q, K, V</text>
+      <text x="99" y="150" text-anchor="middle" class="dg-mut">tiles in →</text>
+      <rect x="44" y="216" width="110" height="40" rx="8" class="dg-box"/>
+      <text x="99" y="241" text-anchor="middle" class="dg-label">output</text>
+      <text x="99" y="278" text-anchor="middle" class="dg-mut">← final only</text>
+
+      <!-- SRAM in the middle: the highlighted on-chip work -->
+      <rect x="232" y="54" width="368" height="240" rx="12" class="dg-box-edge glow"/>
+      <text x="416" y="78" text-anchor="middle" class="dg-ember" style="font-weight:700">fast on-chip SRAM — the tile loop</text>
+
+      <rect x="256" y="100" width="150" height="46" rx="8" class="dg-box"/>
+      <text x="331" y="128" text-anchor="middle" class="dg-label">Q-tile · K-tileᵀ</text>
+      <rect x="426" y="100" width="150" height="46" rx="8" class="dg-box"/>
+      <text x="501" y="128" text-anchor="middle" class="dg-label">partial softmax</text>
+
+      <rect x="256" y="168" width="320" height="58" rx="8" class="dg-box-accent"/>
+      <text x="416" y="192" text-anchor="middle" class="dg-cyan" style="font-weight:700">online softmax: running max + running sum</text>
+      <text x="416" y="212" text-anchor="middle" class="dg-mut">rescale &amp; accumulate each tile → exact result</text>
+
+      <!-- loop arrow -->
+      <path d="M501 146 C 540 158 540 158 530 168" class="dg-arrow" marker-end="url(#arwM4b)"/>
+      <path d="M256 197 C 230 178 244 150 254 134" class="dg-line dg-dash"/>
+      <text x="300" y="252" text-anchor="middle" class="dg-mut">repeat over all tiles (no HBM round-trip)</text>
+
+      <!-- in/out arrows across the bus -->
+      <line x1="156" y1="112" x2="252" y2="118" class="dg-arrow" marker-end="url(#arwM4b)"/>
+      <line x1="416" y1="226" x2="120" y2="224" class="dg-arrow" marker-end="url(#arwM4b)"/>
+
+      <!-- contrast note -->
+      <rect x="624" y="120" width="72" height="108" rx="10" class="dg-box"/>
+      <text x="660" y="150" text-anchor="middle" class="dg-mut">no</text>
+      <text x="660" y="168" text-anchor="middle" class="dg-mut">N×N</text>
+      <text x="660" y="186" text-anchor="middle" class="dg-mut">in</text>
+      <text x="660" y="204" text-anchor="middle" class="dg-mut">HBM</text>
+    </svg>
+  </div><figcaption class="fig-cap"><b>Figure 2.</b> The fused path. The glowing box is the on-chip SRAM tile loop where all the real work happens. Only small inputs come in and a small output goes out; the giant score table is born and dies inside SRAM and <b>never crosses the slow bus.</b> Compare the four ember round-trips in Figure 1 — they're gone.</figcaption></figure>
+
+  <p>Stand the two figures side by side and the lesson is visual. The unfused picture is dominated by a big table sloshing across a slow bus. The fused picture moves that entire computation onto the chip and leaves the slow bus nearly empty. Nothing about the formula changed. We only changed <em>where the intermediate numbers live</em> — and that was the whole ballgame.</p>
+
+  <details class="aside"><summary>Optional deep dive: how the online softmax stays exact <span class="aside-tag">advanced</span></summary>
+  <div class="aside-body"><p>Ordinary softmax over a row of scores <span class="var">s</span> is computed in a numerically safe way by first subtracting the row's maximum: weight<sub>i</sub> = exp(<span class="var">s</span><sub>i</sub> − <span class="var">m</span>) ÷ Σ exp(<span class="var">s</span><sub>j</sub> − <span class="var">m</span>), where <span class="var">m</span> is the max over the whole row. Subtracting <span class="var">m</span> doesn't change the result; it just keeps the exponentials from overflowing.</p>
+  <p>The catch is that you seem to need the whole row to know <span class="var">m</span> and the sum. The online version processes the row one tile at a time and keeps two running numbers: the max seen so far, <span class="var">m</span>, and the running denominator, <span class="var">ℓ</span> (a sum of exponentials). When a new tile reveals a larger max <span class="var">m</span><sub>new</sub>, every quantity accumulated under the old, smaller max is off by a constant factor of exp(<span class="var">m</span> − <span class="var">m</span><sub>new</sub>). So you multiply the running sum <span class="var">ℓ</span> <em>and</em> the running output by exactly that factor to "re-base" them to the new max, then fold in the new tile. Because the correction is an exact algebraic rescaling — not a rounding or a guess — the value you have after the final tile equals the value you'd get from the full-row softmax to floating-point precision. That is precisely why FlashAttention can claim to be exact rather than approximate.</p></div></details>
+
+  <p>If you want a feel for the shape of the code, here's a sketch of the tile loop. It is illustrative — real kernels handle padding, scaling, masking, and pipelining — but it shows the skeleton: two loops over tiles, all the work on-chip, running totals carried along.</p>
+
+  <div class="code-walk">
+    <div class="cw-bar"><span class="cw-dots"><i></i><i></i><i></i></span><span class="cw-name">flash_attention_sketch.py</span><button class="cw-copy">copy</button></div>
+    <pre><code><span class="tok-com"># sketch — the FlashAttention tile loop (illustrative, not a real kernel)</span>
+<span class="tok-kw">for</span> q_tile <span class="tok-kw">in</span> <span class="tok-fn">blocks_of</span>(Q):          <span class="tok-com"># a small block of queries, loaded into SRAM</span>
+    out = <span class="tok-num">0</span>                          <span class="tok-com"># running output for this query tile</span>
+    m   = <span class="tok-op">-</span>inf                       <span class="tok-com"># running max  (for the online softmax)</span>
+    l   = <span class="tok-num">0</span>                          <span class="tok-com"># running sum of exp  (the denominator)</span>
+    <span class="tok-kw">for</span> kv_tile <span class="tok-kw">in</span> <span class="tok-fn">blocks_of</span>(K, V):    <span class="tok-com"># stream key/value blocks past it</span>
+        s        = q_tile @ kv_tile.K.T   <span class="tok-com"># partial scores, on-chip in SRAM</span>
+        m_new    = <span class="tok-fn">max</span>(m, s.<span class="tok-fn">max</span>())        <span class="tok-com"># grow the running max if needed</span>
+        rescale  = <span class="tok-fn">exp</span>(m <span class="tok-op">-</span> m_new)         <span class="tok-com"># re-base old totals to the new max</span>
+        p        = <span class="tok-fn">exp</span>(s <span class="tok-op">-</span> m_new)         <span class="tok-com"># exponentiate this tile</span>
+        l        = l <span class="tok-op">*</span> rescale <span class="tok-op">+</span> p.<span class="tok-fn">sum</span>()
+        out      = out <span class="tok-op">*</span> rescale <span class="tok-op">+</span> p @ kv_tile.V
+        m        = m_new
+    <span class="tok-fn">write_to_hbm</span>(out <span class="tok-op">/</span> l)            <span class="tok-com"># only the FINAL, small output leaves the chip</span></code></pre>
+    <div class="cw-note">Notice what never appears: a full <span class="var">N</span> × <span class="var">N</span> array, and any <code>write_to_hbm</code> of the scores. The scores <code>s</code> exist only as a tiny tile inside the inner loop. The <code>rescale</code> step is the online-softmax correction that keeps the running totals exact as the max grows. The only thing that crosses back to slow memory is the finished output.</div>
+  </div>
+
+  <div class="quiz">
+    <p class="q-tag">Check your understanding</p>
+    <p class="q-text">What does the "online softmax" make possible in FlashAttention?</p>
+    <ul class="q-opts">
+      <li><button class="q-opt" data-correct="false">It approximates the softmax with a cheaper function to save arithmetic.</button></li>
+      <li><button class="q-opt" data-correct="true">It lets softmax be computed correctly while seeing the scores only one tile at a time, using a running max and running sum — so the full row never has to exist in memory at once.</button></li>
+      <li><button class="q-opt" data-correct="false">It lets the GPU skip the softmax entirely for most token pairs.</button></li>
+    </ul>
+    <div class="q-explain"><b>Why:</b> Softmax normally needs the whole row to normalize. The online softmax keeps a running max and running sum and rescales as each tile arrives, so it reaches the exact same answer incrementally. That's what lets the work stay in small SRAM tiles instead of building the whole table in HBM — and it's exact, not approximate.</div>
+  </div>
+
+  <div class="quiz">
+    <p class="q-tag">Check your understanding</p>
+    <p class="q-text">Is FlashAttention an <em>approximation</em> of attention?</p>
+    <ul class="q-opts">
+      <li><button class="q-opt" data-correct="false">Yes — it drops the least important token pairs to go faster, trading a little quality for speed.</button></li>
+      <li><button class="q-opt" data-correct="false">Yes — it estimates the score table with a cheaper formula.</button></li>
+      <li><button class="q-opt" data-correct="true">No — it computes the exact same output as standard attention; it only reorganizes the computation to avoid writing the big intermediate table to slow memory.</button></li>
+    </ul>
+    <div class="q-explain"><b>Why:</b> This is the crucial distinction. <em>Sparse</em> and <em>approximate</em> attention change the math and risk quality. FlashAttention changes only the <em>memory schedule</em> — tiling plus an online softmax — and returns the identical result to floating-point precision. Speed with no quality trade-off is exactly why it was adopted everywhere.</div>
+  </div>
+
+  <h3><span class="h3-num">5.5</span> A series of papers, riding the hardware frontier</h3>
+
+  <p>FlashAttention isn't a single paper — it's a <em>series</em>. Each new entry takes the same core idea (be aware of where data lives; keep the big intermediate off slow memory) and re-engineers it for the latest generation of chips, because every new GPU shifts the balance between compute and bandwidth. The general name for this stance is <span data-term="io-aware">IO-aware</span> kernel design: optimize for the cost of <em>moving</em> data, not just the cost of computing on it.</p>
+
+  <p>The most recent installment in the series targets NVIDIA's newest <span data-term="b200">B200</span> GPUs (the Blackwell generation), and — tying back to the previous module — it is written using the <strong>CuTe DSL</strong>, the Python-based language for expressing high-performance GPU kernels that evolved out of NVIDIA's CUTLASS library. The fact that a state-of-the-art kernel is now authored in CuTe is a strong signal: it's exactly the toolchain you read about in Module 04, used on the literal frontier. Learning it is not academic.</p>
+
+  <div class="callout note"><p class="co-h">Source note</p><p>The specific paper for the newest FlashAttention installment could not be reliably verified when this module was written (its identifier appears future-dated). So the description here teaches the <strong>stable, well-established</strong> FlashAttention idea — IO-awareness, tiling, and the online softmax — which is settled knowledge. Treat any version-specific details (exact authors, benchmark numbers, the precise feature list of the latest release) as things to confirm against the paper itself; this module deliberately does not quote figures it could not check.</p></div>
+
+  <div class="callout note"><p class="co-h">Good to know</p><p>Why re-do it for every chip? Because hardware keeps moving the bottleneck. A new GPU might double its arithmetic throughput but grow its memory bandwidth far less, which makes being IO-aware <em>more</em> important, not less. The algorithm is stable; the engineering that wrings peak performance out of each new chip is a fresh, valuable problem each time — and those problems are precisely what labs pay for.</p></div>
+
+  <h3><span class="h3-num">5.6</span> The meta-lesson — the skill that actually gets you hired</h3>
+
+  <p>It's tempting to file FlashAttention away as "a clever trick I now know." Resist that. If you walk away memorizing only the trick, you've missed the lesson — and the author is blunt about this. The point of the story is <em>not</em> tiling or online softmax. The point is the <strong>move that found them</strong>: noticing that the model everyone was optimizing within (count the FLOPs) was missing a variable (memory bandwidth), and that adding it dissolved the problem.</p>
+
+  <blockquote class="callout quote">"The important part is identifying unmodelled constraints on system performance, which can always be done by zooming out and viewing a system … more holistically."<cite>— Vladimir Feinberg</cite></blockquote>
+
+  <p>Read that twice. The transferable skill is <strong>identifying the unmodelled constraint</strong> — the real bottleneck nobody had on their dashboard — by stepping back and looking at the whole system instead of grinding away inside one corner of it. Memory bandwidth was the unmodelled constraint here. In your next problem it will be something else: a synchronization stall, a data-loading pipeline, a network hop, a cache that keeps getting evicted, a humble copy that quietly dominates the runtime. There is always a next constraint. The engineer who can find it — not the one who memorized last year's trick — is the one a frontier lab wants.</p>
+
+  <div class="callout warn"><p class="co-h">Watch out</p><p>Even if you already know the flash-attention trick, don't be dismissive in an interview or a discussion. Reciting the answer signals you read a blog post. Explaining <em>how someone would have found it</em> — by widening the performance model until the true bottleneck appears — signals you can do the work on a problem nobody has solved yet. That second thing is the rare, hireable skill.</p></div>
+
+  <div class="callout key"><p class="co-h">Key idea — the whole module in one line</p><p>Don't optimize harder inside a model that's missing a variable. <strong>Zoom out, find the unmodelled constraint, and restructure around it.</strong> FlashAttention is one famous instance of a skill you'll use forever.</p></div>
+
+  <div class="quiz">
+    <p class="q-tag">Check your understanding</p>
+    <p class="q-text">According to the essay, what is the truly transferable skill that the FlashAttention story is meant to teach?</p>
+    <ul class="q-opts">
+      <li><button class="q-opt" data-correct="false">Memorizing the tiling pattern and the online-softmax formula so you can reproduce them on demand.</button></li>
+      <li><button class="q-opt" data-correct="true">Identifying an unmodelled constraint on performance — the real bottleneck no one was tracking — by zooming out and viewing the whole system holistically.</button></li>
+      <li><button class="q-opt" data-correct="false">Always replacing exact computations with faster approximations whenever a model is too slow.</button></li>
+    </ul>
+    <div class="q-explain"><b>Why:</b> The trick itself will be outdated by the next chip. What lasts is the <em>method</em>: widen your model of the system until the constraint everyone missed becomes visible, then restructure around it. The essay is explicit that there is "always a next constraint," and finding it is the skill labs hire for.</div>
+  </div>
+
+  <div class="checkpoint"><p class="cp-h">✓ Checkpoint — you should now be able to…</p>
+  <ul>
+    <li>Explain why standard "unfused" attention is slow on long sequences (the <span class="var">N</span> × <span class="var">N</span> table makes repeated round-trips to slow HBM, and the operation is memory-bound).</li>
+    <li>Describe the FLOP-only fallacy: why a model that counts only arithmetic makes the wasteful implementation look fine and tempts you to change the math.</li>
+    <li>Say in one breath what FlashAttention does — tile the computation into SRAM and combine tiles with an online softmax — and why it is <strong>exact, not an approximation.</strong></li>
+    <li>State the meta-lesson: real systems skill is finding the unmodelled constraint by zooming out, and there is always a next one.</li>
+    <li>Connect the dots: this is "lateral systems thinking," it's authored on real frontier hardware (B200) with CuTe, and it's exactly the skill that gets an outsider pulled into a lab.</li>
+  </ul></div>
+
+  <script type="application/json" class="glossary-add">
+  {
+    "flash-attention": {"term":"FlashAttention","short":"An exact, IO-aware way to compute attention that avoids writing the big N×N score table to slow memory.","long":"FlashAttention restructures the attention computation so the large intermediate score matrix is never materialized in slow HBM. It processes the work in small tiles inside fast on-chip SRAM and combines them with an online softmax. The output is mathematically identical to standard attention — it is a memory-schedule optimization, not an approximation — and it gives large speedups, especially on long sequences.","tag":"kernels"},
+    "online-softmax": {"term":"Online softmax","short":"A way to compute softmax incrementally with a running max and running sum, without seeing all the scores at once.","long":"The online (streaming) softmax keeps a running maximum and a running sum of exponentials as scores arrive in tiles, rescaling the partial results when the maximum grows. After the final tile the totals make the result exact — identical to softmax over the full row — which is what lets FlashAttention keep the computation in small SRAM tiles.","tag":"kernels"},
+    "tiling": {"term":"Tiling (blocking)","short":"Splitting a big computation into small blocks that each fit in fast on-chip memory.","long":"Tiling, also called blocking, breaks a large operation into small blocks sized to fit in fast SRAM, so each block can be computed on-chip without round-trips to slow HBM. It is the central structural move in FlashAttention and in fast kernels generally.","tag":"kernels"},
+    "io-aware": {"term":"IO-aware","short":"A kernel design philosophy that optimizes for the cost of moving data, not just the cost of computing on it.","long":"An IO-aware algorithm is designed around the cost of input/output — moving data between slow HBM and fast SRAM — rather than only the arithmetic (FLOP) cost. FlashAttention is the canonical example: it minimizes memory traffic to beat a memory-bound bottleneck.","tag":"kernels"},
+    "materialization": {"term":"Materialization","short":"Actually computing and storing an intermediate value in memory (rather than producing it on the fly).","long":"To materialize a value is to compute it fully and write it to memory. Standard attention materializes the entire N×N score matrix in slow HBM; FlashAttention's whole point is to avoid materializing it there, producing and consuming it in small on-chip tiles instead.","tag":"kernels"},
+    "b200": {"term":"B200 (NVIDIA Blackwell)","short":"NVIDIA's Blackwell-generation data-center GPU, a recent target for frontier kernel work.","long":"The B200 is a GPU in NVIDIA's Blackwell generation, used for training and serving large models. New GPU generations shift the balance of compute versus memory bandwidth, which is why kernels like FlashAttention are re-engineered for each one — the latest installment targets the B200 and is written in the CuTe DSL.","tag":"hardware"}
+  }
+  </script>
+</section>
