@@ -1,0 +1,179 @@
+<section class="module" id="p-attention" data-num="P1" data-title="Attention Is All You Need" data-level="paper" data-track="papers">
+  <h2>Paper Deep-Dive: <em>Attention Is All You Need</em></h2>
+  <p class="lead">In 2017, a small team at Google wrote an eight-page paper that quietly killed the dominant architecture in deep learning and replaced it with something simpler, faster, and — as we'd find out — much, much better at language. <b>By the end of this section you will be able to read the original paper and understand every figure in it, in plain English, with no prior ML background.</b></p>
+
+  <blockquote class="callout quote">"We propose a new simple network architecture, the Transformer, based solely on attention mechanisms, dispensing with recurrence and convolutions entirely."<cite>— Vaswani et al., 2017</cite></blockquote>
+
+  <p>That single sentence from the abstract is the whole revolution. Everything you have ever heard about — ChatGPT, Claude, Gemini, every large language model — is a direct descendant of the architecture introduced in this paper, called the <span data-term="transformer">Transformer</span>. If you only ever read one paper in machine learning, this is the one. Frontier labs treat fluency with this paper the way doctors treat anatomy: not an interview question, but a shared language you must already speak.</p>
+
+  <p>So we are going to walk through it from zero. No calculus. No prior ML. We will define every single term the first time we use it. By the end you will understand what the paper proposes, why it worked, and why the field never went back.</p>
+
+  <h3><span class="h3-num">P1.1</span> The world before this paper</h3>
+
+  <p>To understand why the Transformer was a big deal, you need to feel the pain it removed. Before 2017, if you wanted a neural network to read or write a sentence, you used a <span data-term="rnn">recurrent neural network</span> (RNN). An RNN reads a sentence one word at a time, the way you might read it aloud — left to right. After each word, it updates a tiny internal memory ("the state") that summarises everything it has seen so far. By the time it reaches the end of the sentence, that state is supposed to contain the whole meaning.</p>
+
+  <div class="callout analogy"><p class="co-h">Analogy</p><p>Reading with an RNN is like passing a single sticky note down a line of people. Person 1 reads the first word, scribbles a summary on the note, and hands it to person 2. By person 50 the note is hopelessly smudged and person 1's contribution has nearly vanished. That smudging is called <em>long-range forgetting</em>, and RNNs were notoriously bad at it.</p></div>
+
+  <p>RNNs had two other deep problems. First, they were <b>serial</b>: word 2 cannot be processed until word 1 is done, word 3 cannot start until word 2 is done, and so on. Modern hardware — GPUs and TPUs — wants to do thousands of things in parallel; an RNN gives it nothing to parallelise. Training was painfully slow. Second, the gradients used to teach an RNN had to flow back through every step, and over long sentences they tended to vanish or explode, making the network hard to train at all.</p>
+
+  <p>People tried patches. <b>LSTMs</b> and <b>GRUs</b> were souped-up RNN cells with little internal gates that helped them remember longer. Then convolutional networks were tried on text. Then "attention" was bolted onto RNNs as a way to look back at earlier words when the model was about to produce an output word. That last idea — attention as an add-on — kept getting more powerful. The paper we are reading asked an audacious question: <em>what if attention is not the bolt-on but the whole engine?</em> Could you throw out the recurrence entirely?</p>
+
+  <h3><span class="h3-num">P1.2</span> The one idea you must understand: self-attention</h3>
+
+  <p>Here is the single mental model that unlocks the whole paper. Forget reading a sentence left to right. Imagine all the words of the sentence laid out in front of you on a table, like Scrabble tiles. For each word, you ask: <em>which other words on this table should I be paying attention to in order to understand this one?</em> That is <span data-term="self-attention">self-attention</span>, and it happens for every word simultaneously, in parallel.</p>
+
+  <p>Consider the sentence: <em>"The animal didn't cross the street because it was too tired."</em> To understand the word <em>it</em>, the model needs to figure out: does <em>it</em> refer to <em>the animal</em> or <em>the street</em>? Self-attention is the mechanism that lets the word <em>it</em> look around and decide that <em>animal</em> is the right thing to focus on. No memory passed down a chain. No left-to-right. Just every word looking at every other word, weighing how relevant each one is.</p>
+
+  <div class="callout key"><p class="co-h">Key idea</p><p>Self-attention turns "understanding a sentence" from a chain (one word at a time) into a graph (every word talking to every other word at once). That is the entire conceptual jump of the paper. Everything else is engineering details on top of it.</p></div>
+
+  <p>How does a neural network actually <em>do</em> this? With three vectors per word, called <span data-term="qkv">Query, Key, and Value</span> — usually written <b>Q, K, V</b>. The intuition is a tiny library:</p>
+
+  <ul>
+    <li><b>Query (Q):</b> what this word is <em>looking for</em>. ("I'm a pronoun — who do I refer to?")</li>
+    <li><b>Key (K):</b> what this word <em>advertises about itself</em>. ("I'm a noun, an animal, the subject of the sentence.")</li>
+    <li><b>Value (V):</b> what this word will <em>contribute</em> if it ends up being attended to. ("Here is my meaning, if you want it.")</li>
+  </ul>
+
+  <p>For every word, you take its Query and compare it against every other word's Key. The closer the match, the higher the score. Then you turn those scores into percentages — they have to add up to 100% — and you use those percentages to mix together the Values. The mix is the new representation of the word. It now contains a little bit of every word in the sentence, weighted by how relevant each one was.</p>
+
+  <p>That comparison-and-mixing is a single equation. It is the most famous equation in modern AI:</p>
+
+  <div class="eq">Attention(<span class="var">Q,K,V</span>) = softmax<span class="op">(</span>
+    <span class="frac"><span class="fn"><span class="var">Q K</span><sup>⊤</sup></span><span class="fd">√<span class="var">d</span><sub>k</sub></span></span>
+    <span class="op">)</span> <span class="var">V</span>
+    <span class="eqn-tag">— scaled dot-product attention</span></div>
+
+  <p>Let's translate every symbol. <b>Q K<sup>⊤</sup></b> means "multiply each Query against every Key" — that gives you a grid of compatibility scores, one score per (word-pair). <b>√d<sub>k</sub></b> is the square root of the size of each Key vector; we divide by it so the scores don't grow uncomfortably large when the vectors are long. <b><span data-term="softmax">softmax</span></b> is a function that takes a list of numbers and squishes them into a probability distribution — positive numbers that sum to one. Finally, multiplying by <b>V</b> uses those probabilities to mix the Value vectors. That is the whole formula. Run it once for every word, in parallel, and you have done self-attention.</p>
+
+  <div class="callout note"><p class="co-h">Why divide by √d<sub>k</sub>?</p><p>If the Key vectors are very long (say 64 numbers), the dot products tend to come out very large. Big numbers fed into softmax give nearly-one-hot outputs ("100% on the top match, 0% on everything else"), which makes learning much harder. Dividing by √d<sub>k</sub> keeps the numbers in a sane range. This is what the word "scaled" in "scaled dot-product attention" refers to.</p></div>
+
+  <figure class="paper-fig">
+    <div class="pf-body pf-side">
+      <img src="images/papers/attention-is-all-you-need/ModalNet-19.png" alt="Scaled Dot-Product Attention diagram from the paper">
+      <img src="images/papers/attention-is-all-you-need/ModalNet-20.png" alt="Multi-Head Attention diagram from the paper">
+    </div>
+    <figcaption class="pf-cap"><b>Figure 2 (from the paper).</b> Left: <em>Scaled Dot-Product Attention</em> — the single formula above, drawn as a flowchart. Right: <em>Multi-Head Attention</em> — running that formula several times in parallel with different learned projections, then stitching the results back together.</figcaption>
+  </figure>
+
+  <div class="quiz">
+    <p class="q-tag">Check your understanding</p>
+    <p class="q-text">In self-attention, why are there <b>three</b> vectors (Q, K, V) per word instead of just one?</p>
+    <ul class="q-opts">
+      <li><button class="q-opt" data-correct="false">Three copies make training more stable.</button></li>
+      <li><button class="q-opt" data-correct="true">Each plays a different role: Q is what a word is looking for, K is what it advertises, V is what it contributes if attended to.</button></li>
+      <li><button class="q-opt" data-correct="false">It's a coincidence of the math — only Q and K are really needed.</button></li>
+    </ul>
+    <div class="q-explain"><b>Why:</b> Splitting "what I'm looking for" from "what I'm offering" from "what I'll pass along" lets the network learn rich relationships. With only one vector per word you couldn't separately ask <em>and</em> answer; with two you couldn't separate the answer from the content delivered. Three is the minimum that makes the mechanism expressive.</div>
+  </div>
+
+  <h3><span class="h3-num">P1.3</span> Multi-head attention: many small attentions are better than one big one</h3>
+
+  <p>One attention calculation per word gives you one way of weighing relationships. But sentences have many <em>kinds</em> of relationships at once: subject-verb agreement, what pronouns refer to, which adjective modifies which noun, whether a clause is the cause or the effect. Asking one attention layer to capture all of these at once is a lot.</p>
+
+  <p>The paper's fix is elegant and ridiculously practical: run attention <b>several times in parallel</b>, each with its own small learned projection of Q, K, and V, and then concatenate the results. Each parallel run is called a <span data-term="head">head</span>. The original paper used <b>eight heads</b>. Each head is free to specialise — one might learn to track pronouns, another might track verb tenses — and together they cover more ground.</p>
+
+  <div class="callout analogy"><p class="co-h">Analogy</p><p>One attention head is like reading the sentence with a single coloured highlighter. Multi-head attention is reading the sentence with eight different highlighters at once — one for subjects, one for objects, one for tense, one for sentiment, and so on. You see more structure because each head is allowed to look for something different.</p></div>
+
+  <p>Crucially, each head works in a <em>smaller</em> subspace, so the total computation is roughly the same as one big attention — multi-head doesn't cost much extra. You get diversity almost for free. Later in the paper, the authors visualise individual heads and you can actually see them latch onto syntactic patterns like "this verb attends to its direct object" or "this pronoun attends to its antecedent."</p>
+
+  <figure class="paper-fig">
+    <div class="pf-body">
+      <img src="images/papers/attention-is-all-you-need/x1.png" alt="Attention pattern from the paper showing heads attending to long-range dependencies">
+    </div>
+    <figcaption class="pf-cap"><b>Figure 3 (from the paper).</b> The trained model's encoder self-attention in layer 5 of 6, visualised on a real sentence. Each coloured line is one attention head attending from the word <em>making</em> to other words. Several heads correctly attend to the distant word <em>more</em>, completing the phrase <em>making … more difficult</em> — exactly the long-range dependency that RNNs struggled with.</figcaption>
+  </figure>
+
+  <h3><span class="h3-num">P1.4</span> The Transformer, end to end</h3>
+
+  <p>Now we can read Figure 1 of the paper — the iconic diagram you have probably seen on a thousand slides. It looks intimidating, but every component is something we've already covered or can explain in one line.</p>
+
+  <figure class="paper-fig">
+    <div class="pf-body pf-tall">
+      <img src="images/papers/attention-is-all-you-need/ModalNet-21.png" alt="The Transformer architecture — encoder on the left, decoder on the right">
+    </div>
+    <figcaption class="pf-cap"><b>Figure 1 (from the paper).</b> The Transformer architecture. Left stack: the <em>encoder</em>, which reads the input sentence. Right stack: the <em>decoder</em>, which produces the output sentence one word at a time. Each "Nx" means "this block is stacked six times." Everything inside the blocks is either attention or a small feed-forward network.</figcaption>
+  </figure>
+
+  <p>The original Transformer was built for translation — say, English to German — so it has two halves:</p>
+
+  <ul>
+    <li><b>The encoder (left)</b> reads the English sentence and produces a rich, contextual representation of every word. It is a stack of six identical blocks. Each block is: multi-head self-attention → a small feed-forward network applied to each position → done. Residual connections and layer normalisation wrap each step (they help the gradients flow, a standard trick).</li>
+    <li><b>The decoder (right)</b> produces the German translation, one word at a time. Each of its six blocks has <em>three</em> sub-layers: (1) masked self-attention over the words it has produced so far, (2) cross-attention into the encoder's output (this is how the decoder "reads" the English sentence while it writes German), and (3) a feed-forward network.</li>
+  </ul>
+
+  <p>"Masked" self-attention in the decoder means: when producing word number 5, the model is forbidden from looking at words 6, 7, 8, etc. — because they haven't been written yet. The mask just sets those attention scores to negative infinity before the softmax, so they become zero. Small detail, big consequence: this is what lets the same architecture work for generative models like GPT.</p>
+
+  <div class="callout note"><p class="co-h">Good to know</p><p>Modern large language models (GPT, Claude) keep <em>only the decoder half</em> with masked self-attention. Models like BERT keep <em>only the encoder half</em>. Translation-style models keep both. Every one of these is a Transformer.</p></div>
+
+  <h3><span class="h3-num">P1.5</span> Positional encodings: a clever workaround</h3>
+
+  <p>There is one problem we glossed over. When you let every word attend to every other word in parallel, the model has no idea what <em>order</em> the words were in. "The dog bit the man" and "The man bit the dog" would look identical to it. That obviously won't do.</p>
+
+  <p>The paper fixes this by adding a <span data-term="positional-encoding">positional encoding</span> to each word's input. Each position (1st word, 2nd word, 3rd word, …) gets its own unique vector of numbers, and that vector is added to the word's embedding before the attention layers see it. The paper uses sines and cosines at different frequencies to build these vectors — a clever choice because the model can, in principle, learn to compute things like "two positions apart" from them.</p>
+
+  <div class="callout analogy"><p class="co-h">Analogy</p><p>Positional encodings are like seat numbers at a conference. Without them, everyone at the round table is just "a person." With them, you can say "the person in seat 4" and "the person in seat 7," and you can reason about who is sitting next to whom. The attention layer is free to ignore seat numbers if it wants — but they are there if needed.</p></div>
+
+  <div class="quiz">
+    <p class="q-tag">Check your understanding</p>
+    <p class="q-text">Why does the Transformer need positional encodings at all?</p>
+    <ul class="q-opts">
+      <li><button class="q-opt" data-correct="false">Because softmax does not work without them.</button></li>
+      <li><button class="q-opt" data-correct="true">Because pure attention treats the input as an unordered set, so word order would otherwise be invisible to the model.</button></li>
+      <li><button class="q-opt" data-correct="false">Because GPUs require fixed-length inputs.</button></li>
+    </ul>
+    <div class="q-explain"><b>Why:</b> Self-attention computes weights between every pair of words but doesn't, by itself, care which came first. Adding a position-specific vector to each input gives the model a way to recover order — without re-introducing the slow, serial processing that RNNs were stuck with.</div>
+  </div>
+
+  <h3><span class="h3-num">P1.6</span> What actually happened when they trained it</h3>
+
+  <p>The authors trained the Transformer on standard English-to-German and English-to-French translation benchmarks. The headline result: it beat the best previous models (which were mostly RNNs with attention bolted on) on translation quality, while training in a small fraction of the time. The paper reports their big model trained in roughly 3.5 days on 8 GPUs — fast, for the era — and reached a new state of the art.</p>
+
+  <p>But the lasting impact wasn't the translation numbers. It was the architecture's general-purpose nature. Within a year, BERT (encoder-only Transformer) reshaped how every NLP task was approached. Within two, GPT-2 (decoder-only Transformer) showed that scaling the same recipe up gave you something startlingly fluent. Today, every frontier model you can name is a Transformer, scaled up, with a long list of engineering improvements bolted on but the same skeleton underneath.</p>
+
+  <details class="aside"><summary>Optional deep dive: what changed and what didn't, post-2017 <span class="aside-tag">advanced</span></summary>
+  <div class="aside-body">
+  <p>The 2017 Transformer is recognisable in every modern LLM, but a lot has been refined. The original used post-layer-norm (LayerNorm after the residual add); modern models prefer pre-layer-norm for training stability. <em>Sinusoidal</em> positional encodings have been largely replaced by learned, rotary, or ALiBi positions, which extrapolate better to long contexts. The original feed-forward block is a two-layer MLP with ReLU; modern models often use SwiGLU or GeGLU activations. Multi-head attention has been refined into <em>grouped-query attention</em> and <em>multi-query attention</em> to save memory at inference time. And the standard softmax attention has been re-implemented — same math, much faster — as <em>Flash Attention</em>. None of this changes the core mental model from §P1.2; it just makes the same idea bigger and faster.</p>
+  </div></details>
+
+  <h3><span class="h3-num">P1.7</span> Why this paper, and why for you</h3>
+
+  <p>A frontier-lab interview will not ask you to recite the Transformer architecture. It will assume you already know it. The actual conversations — about long-context attention, kernel-level efficiency, why a certain training run diverged, how a specific architectural tweak might help — all start from the assumption that this paper is in your bones. The good news: it really is one paper, it really is short, and as you have just seen, every idea in it is teachable in plain English.</p>
+
+  <p>If you remember nothing else: self-attention is a parallel, every-word-looks-at-every-other-word operation defined by a single equation; multi-head attention is just running that equation several times with different projections; positional encodings are a small workaround for the loss of word order; and stacking encoder/decoder blocks of these gives you the Transformer. Everything else in modern AI is built on top.</p>
+
+  <div class="callout key"><p class="co-h">Key idea (one line)</p><p>The Transformer replaced serial recurrence with parallel attention — and that single change is what made it possible to scale neural networks to the size of the language they were trying to learn.</p></div>
+
+  <div class="quiz">
+    <p class="q-tag">Check your understanding</p>
+    <p class="q-text">Modern decoder-only large language models (such as GPT and Claude) most closely correspond to which part of the original Transformer paper?</p>
+    <ul class="q-opts">
+      <li><button class="q-opt" data-correct="false">The encoder stack, applied repeatedly.</button></li>
+      <li><button class="q-opt" data-correct="true">The decoder stack, using masked self-attention so the model can only see tokens it has already generated.</button></li>
+      <li><button class="q-opt" data-correct="false">A separate "GPT module" that was added in a follow-up paper.</button></li>
+    </ul>
+    <div class="q-explain"><b>Why:</b> Generative models predict the next token from the previous ones — exactly what the decoder's masked self-attention was designed to do. Encoder-only models (like BERT) see the whole input at once and are better suited to classification and embedding tasks.</div>
+  </div>
+
+  <div class="checkpoint"><p class="cp-h">✓ Checkpoint — you should now be able to…</p>
+  <ul>
+    <li>Explain in one paragraph why RNNs were a bottleneck before 2017.</li>
+    <li>Sketch the scaled dot-product attention equation and say what each symbol means.</li>
+    <li>Say why "multi-head" gives you diversity almost for free.</li>
+    <li>Explain why positional encodings are needed and what they replace.</li>
+    <li>Identify which half of the Transformer modern decoder-only LLMs descend from.</li>
+    <li>Read Figures 1, 2, and 3 of the original paper and narrate them aloud.</li>
+  </ul></div>
+
+  <p><b>Read the paper itself:</b> <a href="https://arxiv.org/abs/1706.03762" target="_blank" rel="noopener">arXiv:1706.03762</a> · <a href="https://arxiv.org/html/1706.03762v7" target="_blank" rel="noopener">HTML version</a>. It is eight pages. Print it.</p>
+
+  <script type="application/json" class="glossary-add">
+  {
+    "rnn": {"term":"RNN (Recurrent Neural Network)","short":"A network that reads a sequence one step at a time, updating a small internal state.","long":"A recurrent neural network processes input sequences serially, updating a hidden state at each step. It was the dominant architecture for language before the Transformer, but struggled with long-range dependencies and was slow to train because each step depends on the previous one.","tag":"architecture"},
+    "self-attention": {"term":"Self-Attention","short":"Every position in a sequence looks at every other position and decides how much each one matters.","long":"Self-attention is the core operation of the Transformer. Each token produces a Query and compares it against the Keys of every other token to get a weight, then mixes the Values according to those weights. It happens in parallel for every position, replacing the serial step-by-step processing of RNNs.","tag":"architecture"},
+    "qkv": {"term":"Query / Key / Value (Q, K, V)","short":"Three learned vectors per token that drive the attention computation.","long":"In attention, each token is projected into three vectors: a Query (what this token is looking for), a Key (what this token advertises about itself), and a Value (what it will contribute if attended to). Attention scores are dot products of Queries against Keys; the resulting weights mix the Values.","tag":"architecture"},
+    "softmax": {"term":"Softmax","short":"A function that turns a list of numbers into a probability distribution (positive, summing to one).","long":"Softmax exponentiates each input and divides by the sum, producing a vector of positive numbers that add up to 1. In attention it converts raw compatibility scores into attention weights, which is why the model's outputs can be read as a mixture of the Values.","tag":"math"},
+    "head": {"term":"Attention Head","short":"One parallel run of attention with its own small learned projections of Q, K, V.","long":"Multi-head attention runs several attention computations in parallel, each with its own projection of Q, K, V into a smaller subspace. Different heads tend to specialise in different relationships (e.g. pronoun resolution, subject-verb agreement). The outputs are concatenated and linearly projected back to the model's hidden size.","tag":"architecture"},
+    "positional-encoding": {"term":"Positional Encoding","short":"A position-specific vector added to each token so the model can tell word order.","long":"Because self-attention treats its input as an unordered set, the model needs a way to know which token came first. Positional encodings — sinusoidal in the original paper, learned or rotary in modern variants — are added to the token embeddings to inject position information without re-introducing serial computation.","tag":"architecture"}
+  }
+  </script>
+</section>

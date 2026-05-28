@@ -140,6 +140,27 @@ nav.toc ol{list-style:none;margin:0;padding:0}
 .lvl-beginner{color:var(--good);border-color:color-mix(in srgb,var(--good) 40%,transparent)}
 .lvl-core{color:var(--ember-soft);border-color:color-mix(in srgb,var(--ember) 40%,transparent)}
 .lvl-advanced{color:var(--danger);border-color:color-mix(in srgb,var(--danger) 40%,transparent)}
+.lvl-paper{color:var(--ember);border-color:color-mix(in srgb,var(--ember) 55%,transparent)}
+
+/* ===== nav track group separator (Papers, etc.) ===== */
+.nav-group{list-style:none;margin:18px 11px 6px;padding:10px 0 6px 0;border-top:1px solid var(--line-soft);
+  font-family:var(--font-mono);font-size:10.5px;letter-spacing:.18em;text-transform:uppercase;color:var(--ember);
+  display:flex;align-items:center;gap:8px}
+.nav-group::before{content:"";display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--ember);box-shadow:0 0 8px var(--ember-glow)}
+.nav-group:first-child{margin-top:6px;border-top:none}
+
+/* ===== paper figures (raster images, not inline SVG) ===== */
+.paper-fig{margin:30px 0;border:1px solid var(--line);border-radius:var(--r);background:var(--dg-bg);overflow:hidden}
+.paper-fig .pf-body{padding:18px;display:flex;flex-wrap:wrap;justify-content:center;gap:18px;background:#f7f5ee}
+[data-theme="dark"] .paper-fig .pf-body{background:#ece7d8}
+.paper-fig .pf-body img{display:block;max-width:100%;height:auto;border-radius:6px}
+.paper-fig .pf-body.pf-tall img{max-height:560px;width:auto}
+.paper-fig .pf-body.pf-side img{max-width:46%;height:auto}
+.paper-fig .pf-cap{font-family:var(--font-mono);font-size:12px;line-height:1.5;color:var(--ink-dim);padding:11px 18px;border-top:1px solid var(--line-soft);background:var(--bg-2)}
+.paper-fig .pf-cap b{color:var(--ink-soft)}
+@media (max-width:640px){
+  .paper-fig .pf-body.pf-side img{max-width:100%}
+}
 
 /* ===== topbar (mobile + actions) ===== */
 .topbar{position:sticky;top:0;z-index:40;display:flex;align-items:center;gap:10px;
@@ -554,11 +575,14 @@ details.aside .aside-body > *:first-child{margin-top:6px}
   /* ---------- MODULES + NAV ---------- */
   var modules=$$(".module");
   var navList=$("#navList");
+  var TRACK_LABELS={course:"Course",papers:"Papers"};
+  var prevTrack=null;
   modules.forEach(function(m,i){
     if(!m.id) m.id="m-"+i;
     var num=m.getAttribute("data-num")||(""+i);
     var title=m.getAttribute("data-title")||("Module "+i);
     var level=(m.getAttribute("data-level")||"core").toLowerCase();
+    var track=(m.getAttribute("data-track")||"course").toLowerCase();
 
     /* inject kicker above first heading */
     var h2=m.querySelector("h2");
@@ -567,6 +591,14 @@ details.aside .aside-body > *:first-child{margin-top:6px}
       k.innerHTML='<span class="mnum">'+num+' — '+level.toUpperCase()+'</span><span class="mline"></span>';
       m.insertBefore(k,m.firstChild);
     }
+
+    /* nav group separator (e.g. PAPERS) when track changes — skip on the very first item */
+    if(track!==prevTrack && prevTrack!==null){
+      var gh=document.createElement("li");gh.className="nav-group";
+      gh.textContent=TRACK_LABELS[track]||track;
+      navList.appendChild(gh);
+    }
+    prevTrack=track;
 
     /* nav entry */
     var li=document.createElement("li");
@@ -583,7 +615,12 @@ details.aside .aside-body > *:first-child{margin-top:6px}
       var btn=document.createElement("button");btn.className="complete-btn";btn.setAttribute("data-complete",m.id);
       btn.innerHTML='<span class="cb-box">✓</span> Mark module complete';
       foot.appendChild(btn);
-      var next=modules[i+1];
+      /* "Next" link stays within the same track so course doesn't bleed into papers */
+      var next=null;
+      for(var j=i+1;j<modules.length;j++){
+        var nt=(modules[j].getAttribute("data-track")||"course").toLowerCase();
+        if(nt===track){next=modules[j];break}
+      }
       if(next){
         var nl=document.createElement("a");nl.className="next-link";nl.href="#"+(next.id||("m-"+(i+1)));
         nl.innerHTML='Next: '+(next.getAttribute("data-title")||"continue")+' <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 12h14M13 6l6 6-6 6"/></svg>';
