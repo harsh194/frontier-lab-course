@@ -161,6 +161,13 @@ nav.toc ol{list-style:none;margin:0;padding:0}
 @media (max-width:640px){
   .paper-fig .pf-body.pf-side img{max-width:100%}
 }
+/* embedded standalone paper notes (iframe) */
+.paper-embed{margin:26px 0;border:1px solid var(--line);border-radius:var(--r);overflow:hidden;background:var(--bg-card);box-shadow:0 1px 0 var(--line-soft)}
+.paper-embed-bar{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 15px;background:var(--bg-2);border-bottom:1px solid var(--line-soft);font-family:var(--font-mono);font-size:11.5px;letter-spacing:.02em;color:var(--ink-dim)}
+.paper-embed-bar .pe-doc{color:var(--ink-soft)}
+.paper-embed-bar a{color:var(--ink-soft);text-decoration:none;border-bottom:1px dotted var(--line);white-space:nowrap}
+.paper-embed-bar a:hover{color:var(--ink)}
+.paper-embed iframe{display:block;width:100%;height:82vh;min-height:520px;border:0;background:#fff}
 
 /* ===== topbar (mobile + actions) ===== */
 .topbar{position:sticky;top:0;z-index:40;display:flex;align-items:center;gap:10px;

@@ -25,9 +25,11 @@ quantization, agent research, JAX, and scaling laws.
 - The **Module 08** JAX "addition transformer" code was test-run on real JAX/Flax/Optax and
   trains correctly (~10.7M params, loss converges).
 - **Papers track** — a separate group at the bottom of the sidebar that walks through landmark
-  research papers in plain English, figure by figure. First entry: *Attention Is All You Need*
-  (Vaswani et al., 2017). Original figures are included locally under
-  `images/papers/attention-is-all-you-need/`.
+  research papers in plain English, figure by figure. Three entries, each a full self-contained
+  "from zero" study guide shown in its own styled view (with an "open in a new tab" link):
+  *Attention Is All You Need* (Vaswani et al., 2017), *FlashAttention-4* (a ground-up guide to
+  fast attention kernels), and *ThunderKittens* (Spector et al., 2024 — writing fast GPU kernels).
+  The standalone note pages live under `paper/` and are loaded into the course via `<iframe>`.
 
 ## One honest caveat
 
@@ -47,7 +49,7 @@ The course is assembled from parts in `build/`:
 Rebuild `index.html` after editing any fragment:
 
 ```powershell
-./build.ps1 -Fragments m0.html,m1a.html,m1b.html,m2.html,m3.html,m4.html,m5.html,m6.html,m7.html,m8.html,p0.html
+./build.ps1 -Fragments m0.html,m1a.html,m1b.html,m2.html,m3.html,m4.html,m5.html,m6.html,m7.html,m8.html,p1.html,p2.html,p3.html
 ```
 
 Paper fragments live alongside module fragments and use `data-track="papers"` so the engine

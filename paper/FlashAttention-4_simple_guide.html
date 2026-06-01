@@ -1,0 +1,1494 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>FlashAttention-4 — A Ground-Up Study Guide</title>
+
+<script>
+  MathJax = {
+    tex: { inlineMath: [['$','$'],['\\(','\\)']], displayMath: [['$$','$$'],['\\[','\\]']] },
+    svg: { fontCache: 'global' }
+  };
+</script>
+<script async src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/3.2.2/es5/tex-mml-chtml.min.js"></script>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,500;0,9..144,600;0,9..144,700;0,9..144,900;1,9..144,500&family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;0,6..72,600;1,6..72,400;1,6..72,500&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+
+<style>
+  :root{
+    --paper:#f6f1e8;
+    --paper-2:#efe8da;
+    --panel:#fffdf8;
+    --ink:#211c16;
+    --ink-soft:#4f463a;
+    --ink-faint:#857a68;
+    --rust:#bd4f25;
+    --rust-deep:#8f3713;
+    --teal:#1d6b6b;
+    --teal-deep:#0f4a4a;
+    --gold:#c1922a;
+    --violet:#6a4a86;
+    --line:#e0d8c6;
+    --line-strong:#cabfa6;
+    --tile:#efe7d6;
+    --good:#2f7d4f;
+    --shadow: 0 1px 2px rgba(40,30,15,.05), 0 8px 30px rgba(40,30,15,.06);
+  }
+
+  *{box-sizing:border-box;}
+  html{scroll-behavior:smooth; scroll-padding-top:24px;}
+  body{
+    margin:0;
+    background:
+      radial-gradient(1200px 600px at 80% -10%, rgba(189,79,37,.06), transparent 60%),
+      radial-gradient(900px 500px at -10% 20%, rgba(29,107,107,.06), transparent 55%),
+      var(--paper);
+    color:var(--ink);
+    font-family:"Newsreader", Georgia, "Times New Roman", serif;
+    font-size:19px;
+    line-height:1.72;
+    -webkit-font-smoothing:antialiased;
+    font-optical-sizing:auto;
+  }
+  ::selection{background:rgba(189,79,37,.18);}
+
+  .page{max-width:1180px; margin:0 auto; padding:0 22px 120px;}
+
+  /* ---------- HERO ---------- */
+  .hero{
+    position:relative;
+    padding:64px 0 30px;
+    border-bottom:1px solid var(--line);
+    margin-bottom:14px;
+  }
+  .eyebrow{
+    font-family:"JetBrains Mono", monospace;
+    font-size:12.5px; letter-spacing:.28em; text-transform:uppercase;
+    color:var(--rust); font-weight:600; margin:0 0 18px;
+  }
+  .hero h1{
+    font-family:"Fraunces", serif;
+    font-weight:900; font-size:clamp(40px, 7vw, 78px);
+    line-height:.98; letter-spacing:-.02em; margin:0 0 8px;
+    color:var(--ink);
+  }
+  .hero h1 .four{ color:var(--rust); font-style:italic; font-weight:500;}
+  .hero .sub{
+    font-family:"Fraunces", serif; font-style:italic; font-weight:500;
+    font-size:clamp(20px,2.6vw,27px); color:var(--ink-soft); margin:6px 0 26px; max-width:760px;
+    line-height:1.3;
+  }
+  .hero-meta{
+    display:flex; flex-wrap:wrap; gap:10px 14px; font-family:"JetBrains Mono",monospace;
+    font-size:12.5px; color:var(--ink-faint);
+  }
+  .chip{
+    background:var(--panel); border:1px solid var(--line-strong); border-radius:999px;
+    padding:5px 13px; color:var(--ink-soft); box-shadow:var(--shadow);
+  }
+  .chip b{color:var(--rust); font-weight:700;}
+
+  /* ---------- LAYOUT ---------- */
+  .layout{display:grid; grid-template-columns:248px minmax(0,1fr); gap:48px; align-items:start;}
+  @media(max-width:920px){ .layout{grid-template-columns:1fr; gap:0;} }
+
+  .toc{
+    position:sticky; top:18px; align-self:start;
+    font-family:"JetBrains Mono", monospace; font-size:13px;
+    border-right:1px solid var(--line); padding:18px 20px 30px 0;
+    max-height:calc(100vh - 36px); overflow:auto;
+  }
+  .toc::-webkit-scrollbar{width:8px;}
+  .toc::-webkit-scrollbar-thumb{background:var(--line-strong); border-radius:8px;}
+  .toc h4{
+    font-family:"JetBrains Mono",monospace; font-size:11px; letter-spacing:.22em; text-transform:uppercase;
+    color:var(--ink-faint); margin:0 0 14px; font-weight:700;
+  }
+  .toc a{
+    display:block; color:var(--ink-soft); text-decoration:none; padding:5px 0 5px 14px;
+    border-left:2px solid transparent; line-height:1.4; transition:.15s;
+  }
+  .toc a .n{color:var(--rust); font-weight:700; margin-right:7px;}
+  .toc a:hover{color:var(--ink); border-left-color:var(--rust); background:rgba(189,79,37,.05);}
+  @media(max-width:920px){
+    .toc{position:relative; top:0; max-height:none; border-right:none; border-bottom:1px solid var(--line);
+      padding:22px 0 22px; margin-bottom:10px; columns:2; column-gap:24px;}
+  }
+
+  /* ---------- CONTENT ---------- */
+  .content{max-width:none; min-width:0;}
+  section{padding:40px 0 8px; border-top:1px solid var(--line);}
+  section:first-child{border-top:none; padding-top:26px;}
+
+  .sec-head{display:flex; align-items:baseline; gap:18px; margin-bottom:6px;}
+  .sec-num{
+    font-family:"Fraunces", serif; font-weight:900; font-size:clamp(38px,6vw,62px);
+    color:var(--paper-2); -webkit-text-stroke:1.4px var(--line-strong);
+    line-height:.8; letter-spacing:-.03em; flex:none;
+  }
+  h2{
+    font-family:"Fraunces", serif; font-weight:700; font-size:clamp(25px,3.6vw,36px);
+    line-height:1.08; letter-spacing:-.01em; margin:0; color:var(--ink);
+  }
+  h3{
+    font-family:"Fraunces", serif; font-weight:600; font-size:23px; letter-spacing:-.005em;
+    margin:34px 0 8px; color:var(--rust-deep);
+  }
+  h4{
+    font-family:"JetBrains Mono", monospace; font-weight:700; font-size:13px; letter-spacing:.12em;
+    text-transform:uppercase; color:var(--teal-deep); margin:26px 0 6px;
+  }
+  p{margin:0 0 16px; max-width:72ch;}
+  .lead{font-size:21px; color:var(--ink-soft); max-width:70ch;}
+  .lead em{color:var(--rust-deep);}
+
+  a.ref{color:var(--rust-deep); text-decoration:none; border-bottom:1px solid rgba(143,55,19,.3);}
+  a.ref:hover{border-bottom-color:var(--rust-deep);}
+
+  strong{font-weight:600; color:var(--ink);}
+  em{font-style:italic;}
+  code, .mono{font-family:"JetBrains Mono", monospace; font-size:.86em;}
+  p code, li code, td code{
+    background:var(--paper-2); border:1px solid var(--line); border-radius:5px;
+    padding:1px 6px; color:var(--rust-deep); font-size:.8em; white-space:nowrap;
+  }
+  .term{ font-family:"JetBrains Mono", monospace; font-weight:600; color:var(--teal-deep); font-size:.84em;}
+
+  ul, ol{max-width:72ch; margin:0 0 18px; padding-left:24px;}
+  li{margin:0 0 9px;}
+  ul.tight li, ol.tight li{margin-bottom:4px;}
+  li::marker{color:var(--rust);}
+
+  /* ---------- CALLOUTS ---------- */
+  .box{
+    border-radius:14px; padding:20px 22px; margin:24px 0; background:var(--panel);
+    border:1px solid var(--line); box-shadow:var(--shadow); position:relative;
+    max-width:74ch;
+  }
+  .box .label{
+    font-family:"JetBrains Mono", monospace; font-size:11px; letter-spacing:.18em; text-transform:uppercase;
+    font-weight:700; margin:0 0 8px; display:inline-flex; align-items:center; gap:8px;
+  }
+  .box p:last-child, .box ul:last-child, .box ol:last-child{margin-bottom:0;}
+  .box.def{border-left:4px solid var(--teal);}
+  .box.def .label{color:var(--teal-deep);}
+  .box.key{border-left:4px solid var(--rust); background:linear-gradient(180deg, rgba(189,79,37,.05), var(--panel) 60%);}
+  .box.key .label{color:var(--rust-deep);}
+  .box.analogy{border-left:4px solid var(--gold); background:linear-gradient(180deg, rgba(193,146,42,.07), var(--panel) 60%);}
+  .box.analogy .label{color:#9a740f;}
+  .box.note{border-left:4px solid var(--ink-faint);}
+  .box.note .label{color:var(--ink-soft);}
+  .box.math{border-left:4px solid var(--violet); background:linear-gradient(180deg, rgba(106,74,134,.05), var(--panel) 60%);}
+  .box.math .label{color:var(--violet);}
+  .box.plain{border-left:4px solid var(--good); background:linear-gradient(180deg, rgba(47,125,79,.07), var(--panel) 60%);}
+  .box.plain .label{color:var(--good);}
+  .box.plain p:first-of-type{font-size:18.5px;}
+  .box.teach{border-left:4px dashed var(--teal); background:repeating-linear-gradient(135deg, rgba(29,107,107,.03), rgba(29,107,107,.03) 10px, transparent 10px, transparent 20px), var(--panel);}
+  .box.teach .label{color:var(--teal-deep);}
+
+  .dot{width:8px;height:8px;border-radius:50%;display:inline-block;}
+
+  /* ---------- FIGURES ---------- */
+  figure{margin:30px 0; }
+  figure.wide{ }
+  .fig-frame{
+    background:var(--panel); border:1px solid var(--line); border-radius:16px;
+    padding:22px 20px 8px; box-shadow:var(--shadow); overflow:hidden;
+  }
+  .fig-frame svg{display:block; width:100%; height:auto;}
+  figcaption{
+    font-family:"JetBrains Mono", monospace; font-size:12.5px; color:var(--ink-faint);
+    margin-top:12px; line-height:1.5; max-width:74ch;
+  }
+  figcaption b{color:var(--rust-deep); font-weight:700;}
+
+  /* ---------- TABLES ---------- */
+  .tbl-wrap{overflow-x:auto; margin:24px 0; border:1px solid var(--line); border-radius:14px; box-shadow:var(--shadow); background:var(--panel);}
+  table{border-collapse:collapse; width:100%; font-size:15.5px; min-width:480px;}
+  caption{caption-side:bottom; text-align:left; font-family:"JetBrains Mono",monospace; font-size:12px; color:var(--ink-faint); padding:10px 16px;}
+  th, td{padding:11px 16px; text-align:left; border-bottom:1px solid var(--line);}
+  thead th{
+    font-family:"JetBrains Mono", monospace; font-size:11.5px; letter-spacing:.08em; text-transform:uppercase;
+    color:var(--teal-deep); background:var(--paper-2); font-weight:700;
+  }
+  tbody tr:last-child td{border-bottom:none;}
+  tbody tr:hover{background:rgba(189,79,37,.035);}
+  td.num{font-family:"JetBrains Mono", monospace; text-align:right;}
+  td .hl{color:var(--rust-deep); font-weight:700;}
+  .winner{font-weight:700; color:var(--good);}
+
+  /* ---------- MISC ---------- */
+  .pull{
+    font-family:"Fraunces", serif; font-style:italic; font-weight:500; font-size:clamp(21px,2.6vw,27px);
+    line-height:1.34; color:var(--rust-deep); border-left:3px solid var(--rust);
+    padding:6px 0 6px 24px; margin:30px 0; max-width:30ch;
+  }
+  .divider{height:1px;background:var(--line); margin:36px 0; border:none;}
+  .small{font-size:15.5px; color:var(--ink-soft);}
+  hr.thin{border:none; border-top:1px dashed var(--line-strong); margin:22px 0;}
+
+  .kbar{display:flex; flex-wrap:wrap; gap:10px; margin:20px 0;}
+  .kcard{
+    flex:1 1 150px; background:var(--panel); border:1px solid var(--line); border-radius:12px;
+    padding:14px 16px; box-shadow:var(--shadow);
+  }
+  .kcard .big{font-family:"Fraunces",serif; font-weight:700; font-size:30px; color:var(--rust); line-height:1;}
+  .kcard .lbl{font-family:"JetBrains Mono",monospace; font-size:11.5px; color:var(--ink-faint); margin-top:6px; line-height:1.4;}
+
+  .legend{display:flex; flex-wrap:wrap; gap:8px 18px; font-family:"JetBrains Mono",monospace; font-size:12px; color:var(--ink-soft); margin:10px 2px 2px;}
+  .legend span{display:inline-flex; align-items:center; gap:7px;}
+  .sw{width:14px;height:14px;border-radius:4px; display:inline-block; border:1px solid rgba(0,0,0,.1);}
+
+  .footer{margin-top:60px; padding-top:26px; border-top:1px solid var(--line); font-family:"JetBrains Mono",monospace; font-size:13px; color:var(--ink-faint); line-height:1.7;}
+  .footer b{color:var(--rust-deep);}
+</style>
+</head>
+<body>
+<div class="page">
+
+  <header class="hero">
+    <p class="eyebrow">Paper Study Notes · Explained for total beginners</p>
+    <h1>FlashAttention&#8201;<span class="four">4</span></h1>
+    <p class="sub">A friendly, from-zero guide to the paper. You do not need to know anything about computer chips. Every word is explained in plain English.</p>
+    <div class="hero-meta">
+      <span class="chip">Zadouri, Hoehnerbach, Shah et al. · <b>2026</b></span>
+      <span class="chip">arXiv:2603.05451</span>
+      <span class="chip">About a chip called <b>NVIDIA Blackwell</b></span>
+      <span class="chip">Goal: <b>make AI run faster</b></span>
+    </div>
+  </header>
+
+  <div class="layout">
+    <!-- ===================== TOC ===================== -->
+    <aside class="toc">
+      <h4>Contents</h4>
+      <a href="#tldr"><span class="n">00</span>The short version</a>
+      <a href="#picture"><span class="n">01</span>The big picture</a>
+      <a href="#gpu"><span class="n">02</span>What a GPU is</a>
+      <a href="#attn"><span class="n">03</span>What "attention" does</a>
+      <a href="#flash"><span class="n">04</span>The FlashAttention idea</a>
+      <a href="#asym"><span class="n">05</span>The main insight</a>
+      <a href="#fwd"><span class="n">06</span>The forward pass</a>
+      <a href="#bwd"><span class="n">07</span>The backward pass</a>
+      <a href="#sched"><span class="n">08</span>Sharing the work</a>
+      <a href="#dsl"><span class="n">09</span>Written in Python</a>
+      <a href="#results"><span class="n">10</span>The results</a>
+      <a href="#glossary"><span class="n">11</span>Word list</a>
+      <a href="#study"><span class="n">12</span>How to learn more</a>
+    </aside>
+
+    <main class="content">
+
+      <!-- ===================== 0 TLDR ===================== -->
+      <section id="tldr">
+        <div class="sec-head"><span class="sec-num">00</span><h2>The short version</h2></div>
+        <p class="lead">Here is the whole paper in a nutshell. A chip called a <em>GPU</em> does the heavy math for AI. The newest GPU made its math engine <em>twice as fast</em>. But the parts that <em>feed</em> that engine did not speed up. So the slow part of the job moved somewhere new. <em>FlashAttention-4</em> rebuilds the job to match the new chip.</p>
+
+        <div class="box key">
+          <p class="label"><span class="dot" style="background:var(--rust)"></span>The one idea to hold onto</p>
+          <p style="margin-bottom:0">Think of a race car. The new chip is like a car whose <strong>engine</strong> got twice as strong. But its <strong>fuel line</strong> and <strong>cooling system</strong> stayed the same size. A bigger engine no longer helps, because the fuel can't get in fast enough. To go faster you must <strong>rebuild the pipes</strong> so the engine never has to wait. Rebuilding those pipes <em>is</em> FlashAttention-4.</p>
+        </div>
+
+        <p>If someone asks you "what does this paper do?", you can say: <em>it rewrites a key piece of AI math so a fast new chip stops sitting idle.</em> In more detail, it does five things. Almost every part of these notes is just one of these five, explained slowly:</p>
+        <ol>
+          <li><strong>It makes three jobs happen at the same time.</strong> The math, the loading of data, and a special step called <em>softmax</em> used to take turns. Now they run together, so no part waits (§6, §7).</li>
+          <li><strong>It computes a slow operation two ways at once.</strong> There is a step called <code>exp()</code> that a special unit handles, but that unit is slow. So the paper also fakes <code>exp()</code> on the normal math units. Doing both at once gets more done (§6).</li>
+          <li><strong>It skips work it doesn't need.</strong> A clean-up step called <em>rescaling</em> often isn't needed, so the paper learns when to skip it (§6).</li>
+          <li><strong>It uses two brand-new chip features</strong> (called <em>tensor memory</em> and <em>2-CTA mode</em>) to move less data and to cut a costly step in half (§7).</li>
+          <li><strong>It hands out the work fairly</strong> across the chip's many small cores, so none of them sit idle while others are buried (§8).</li>
+        </ol>
+
+        <p>The reward: it runs up to <strong>1.3× faster than NVIDIA's own software</strong> and about <strong>2.7× faster than another popular tool</strong>, reaching roughly <strong>71% of the chip's top possible speed</strong>. And it is written entirely in <strong>Python</strong>, which makes it build 20–30× faster than the old way (§9).</p>
+
+        <div class="box teach">
+          <p class="label"><span class="dot" style="background:var(--teal)"></span>How to use these notes</p>
+          <p>Read top to bottom. Sections 2, 3, and 4 are background — they explain the chip and the math, assuming you know nothing. The real ideas of the paper start at section 5.</p>
+          <p style="margin-bottom:0">If any short word or code-looking term confuses you, it is explained in the <a class="ref" href="#glossary">Word list (§11)</a>. Green boxes like the next one give you a one-line way to say the idea back in your own words.</p>
+        </div>
+      </section>
+
+      <!-- ===================== 1 BIG PICTURE ===================== -->
+      <section id="picture">
+        <div class="sec-head"><span class="sec-num">01</span><h2>The big picture: why this is hard</h2></div>
+        <p class="lead">To see why the paper matters, you need two simple facts: <em>why</em> this math is the slow part of AI, and <em>how</em> the new chip changed the rules.</p>
+
+        <h3>Why "attention" is the bottleneck</h3>
+        <p>Modern AI models (the things behind chatbots) are built from a step called <span class="term">attention</span>. We will explain attention fully in §3. For now, the only thing you need is this: attention makes <em>every word in your text look at every other word</em>.</p>
+
+        <div class="box analogy">
+          <p class="label"><span class="dot" style="background:var(--gold)"></span>Picture a dinner party</p>
+          <p style="margin-bottom:0">Imagine a dinner where every guest must have a short chat with every other guest. With 10 guests that's about 100 little chats. With 100 guests it jumps to about 10,000. With 1,000 guests it's a million. The number of chats grows with the <em>square</em> of the guest count. Attention works the same way: double the words, and the work goes up <strong>four times</strong>. That is why long texts are so slow — and why making attention fast is one of the biggest prizes in AI.</p>
+        </div>
+
+        <h3>How the new chip changed the rules</h3>
+        <p>Chips improve every few years. But the parts inside a chip do <em>not</em> improve evenly. On the newest chip (NVIDIA's <strong>Blackwell</strong>, the B200), the part that does matrix math — the <em>engine</em> — got <strong>twice as fast</strong>. But the part that moves data around inside the chip, and the part that does the special <code>exp()</code> step, <strong>barely changed</strong>.</p>
+        <p>This uneven jump is the heart of the whole paper. The authors have a name for it: <strong>asymmetric hardware scaling</strong>. "Asymmetric" just means "lopsided." One part raced ahead; the others stood still.</p>
+
+        <div class="box plain">
+          <p class="label"><span class="dot" style="background:var(--good)"></span>In plain words</p>
+          <p style="margin-bottom:0">The engine got twice as strong, but the fuel pipes did not. So the new slow spot is the pipes, not the engine. The paper's whole job is to fix the pipes.</p>
+        </div>
+
+        <h3>The family tree</h3>
+        <p>This is the fourth version of FlashAttention. Each version fixed whatever the slow part was on the chip of its day. Seeing the pattern helps a lot:</p>
+        <div class="tbl-wrap">
+          <table>
+            <thead>
+              <tr><th>Version</th><th>Year</th><th>Key idea</th><th>Hardware era</th></tr>
+            </thead>
+            <tbody>
+              <tr><td><strong>FlashAttention</strong></td><td class="num">2022</td><td>Never write the giant $N{\times}N$ matrix to slow memory. Process attention in <em>tiles</em> and fuse the steps. ("IO-awareness.")</td><td>Ampere (A100)</td></tr>
+              <tr><td><strong>FlashAttention-2</strong></td><td class="num">2023</td><td>Re-organize the work to parallelize across the sequence and keep the GPU busier.</td><td>Ampere</td></tr>
+              <tr><td><strong>FlashAttention-3</strong></td><td class="num">2024</td><td>Exploit <em>asynchrony</em> (let units run independently) and <em>warp specialization</em>; add FP8 low precision.</td><td>Hopper (H100)</td></tr>
+              <tr><td><strong>FlashAttention-4</strong></td><td class="num"><span class="hl">2026</span></td><td><span class="hl">This paper.</span> Re-plumb everything for Blackwell's doubled tensor cores: fully async MMA, software <code>exp()</code>, conditional rescaling, tensor-memory &amp; 2-CTA tricks.</td><td>Blackwell (B200)</td></tr>
+            </tbody>
+          </table>
+          <caption>The throughline: each version adapts attention to a new bottleneck created by new hardware.</caption>
+        </div>
+
+        <p class="pull">FlashAttention-4 is what happens when the math engine gets so fast that the work <em>around</em> it becomes the thing worth fixing.</p>
+      </section>
+
+      <!-- ===================== 2 GPU ===================== -->
+      <section id="gpu">
+        <div class="sec-head"><span class="sec-num">02</span><h2>What a GPU is (from zero)</h2></div>
+        <p class="lead">The whole paper is about getting the most out of one chip. So let's slowly build a picture of what's inside that chip. If you can hold this picture in your head, the rest is easy.</p>
+
+        <h3>Many small workers, not a few big ones</h3>
+        <p>Your laptop has a <strong>CPU</strong>. A CPU is like a few very clever workers who can each do anything, one careful step at a time. Great for everyday tasks.</p>
+        <p>A <span class="term">GPU</span> (graphics processing unit) is the opposite. It's a huge crowd of <em>simple</em> workers who all do similar small jobs at the same time. No single one is clever, but there are thousands of them. AI math is mostly the same simple operation repeated a billion times — perfect for a crowd. That's why AI runs on GPUs.</p>
+        <p>The specific GPU in this paper is NVIDIA's <strong>Blackwell B200</strong>. Inside it are about <strong>148</strong> small factories called <span class="term">SMs</span> (streaming multiprocessors). Each SM is itself a little team of workers with its own tools and its own small storage. The whole chip is 148 of these running side by side.</p>
+
+        <div class="box plain">
+          <p class="label"><span class="dot" style="background:var(--good)"></span>In plain words</p>
+          <p style="margin-bottom:0">A CPU is a few geniuses. A GPU is a giant crowd of simple helpers. The Blackwell chip is a crowd of about 148 small teams (called SMs), all working at once.</p>
+        </div>
+
+        <h3>How the workers are grouped</h3>
+        <p>Inside each team, the workers are organized into neat groups, like an army. You don't need to memorize all the names, but a couple matter later, so here they are from smallest to biggest:</p>
+        <figure>
+          <div class="fig-frame">
+            <svg viewBox="0 0 820 472" xmlns="http://www.w3.org/2000/svg" font-family="JetBrains Mono, monospace">
+              <!-- connectors / multipliers -->
+              <g fill="#857a68" font-size="12.5" text-anchor="middle">
+                <text x="410" y="86">▼ &nbsp; 32 threads &nbsp; ▼</text>
+                <text x="410" y="160">▼ &nbsp; 4 warps = 128 threads &nbsp; ▼</text>
+                <text x="410" y="234">▼ &nbsp; runs on ONE SM &nbsp; ▼</text>
+                <text x="410" y="308">▼ &nbsp; co-scheduled on one GPC &nbsp; ▼</text>
+                <text x="410" y="382">▼ &nbsp; spread across all 148 SMs &nbsp; ▼</text>
+              </g>
+              <!-- thread -->
+              <g>
+                <rect x="335" y="20" width="150" height="50" rx="10" fill="#bd4f25"/>
+                <text x="410" y="42" text-anchor="middle" fill="#fff" font-size="14" font-weight="700">THREAD</text>
+                <text x="410" y="59" text-anchor="middle" fill="#ffe6db" font-size="11">one worker · ≤256 registers</text>
+              </g>
+              <!-- warp -->
+              <g>
+                <rect x="290" y="94" width="240" height="50" rx="10" fill="#d2682f"/>
+                <text x="410" y="116" text-anchor="middle" fill="#fff" font-size="14" font-weight="700">WARP</text>
+                <text x="410" y="133" text-anchor="middle" fill="#ffe6db" font-size="11">32 threads, lockstep — the real unit</text>
+              </g>
+              <!-- warpgroup -->
+              <g>
+                <rect x="245" y="168" width="330" height="50" rx="10" fill="#c1922a"/>
+                <text x="410" y="190" text-anchor="middle" fill="#fff" font-size="14" font-weight="700">WARPGROUP</text>
+                <text x="410" y="207" text-anchor="middle" fill="#fff4dc" font-size="11">128 threads — FA-4 gives each a job (softmax / correction / MMA driver)</text>
+              </g>
+              <!-- CTA -->
+              <g>
+                <rect x="195" y="242" width="430" height="50" rx="10" fill="#2f8a8a"/>
+                <text x="410" y="264" text-anchor="middle" fill="#fff" font-size="14" font-weight="700">CTA  ·  threadblock</text>
+                <text x="410" y="281" text-anchor="middle" fill="#e2f4f4" font-size="11">shares the SM's scratchpad memory · can synchronize together</text>
+              </g>
+              <!-- cluster -->
+              <g>
+                <rect x="140" y="316" width="540" height="50" rx="10" fill="#1d6b6b"/>
+                <text x="410" y="338" text-anchor="middle" fill="#fff" font-size="14" font-weight="700">CLUSTER</text>
+                <text x="410" y="355" text-anchor="middle" fill="#d6ecec" font-size="11">a few CTAs that can read each other's memory (DSMEM) — key for 2-CTA mode</text>
+              </g>
+              <!-- grid -->
+              <g>
+                <rect x="80" y="390" width="660" height="50" rx="10" fill="#211c16"/>
+                <text x="410" y="412" text-anchor="middle" fill="#fff" font-size="14" font-weight="700">GRID</text>
+                <text x="410" y="429" text-anchor="middle" fill="#cdc6b8" font-size="11">the whole launch — every CTA needed to finish the problem</text>
+              </g>
+            </svg>
+          </div>
+          <figcaption><b>The chip's workers, in groups.</b> Each box is a bundle of the smaller boxes inside it. Two names matter later: a <b>warpgroup</b> (a bundle of 128 workers — FlashAttention-4 gives each warpgroup its own job) and a <b>cluster</b> (which lets two groups team up — the “2-CTA” trick).</figcaption>
+        </figure>
+
+        <p>The two names worth remembering: a <span class="term">warpgroup</span> (a bundle of 128 workers — later, the paper gives <em>each</em> warpgroup a different job), and a <span class="term">cluster</span> (a small set of teams that can share data and "team up," which makes a key trick possible).</p>
+
+        <h3>Where the data sits: fast-but-tiny vs huge-but-slow</h3>
+        <p>Here is maybe the most important idea in these whole notes. A chip has several kinds of storage. There is a hard trade-off: <strong>storage that is fast is always tiny, and storage that is huge is always slow.</strong></p>
+
+        <div class="box analogy">
+          <p class="label"><span class="dot" style="background:var(--gold)"></span>Think of your workspace</p>
+          <p style="margin-bottom:0">Your <strong>hands</strong> hold one or two things — instant to use, but almost no room. Your <strong>desk</strong> holds a bit more, still close by. A <strong>filing cabinet</strong> across the room holds a lot, but you have to get up. A <strong>warehouse</strong> across town holds nearly everything, but a trip there takes forever. A chip has the same four levels. Good work means keeping what you need <em>in your hands and on your desk</em>, and almost never driving to the warehouse.</p>
+        </div>
+
+        <p>Here are the chip's levels, top (tiny and fast) to bottom (huge and slow):</p>
+        <figure>
+          <div class="fig-frame">
+            <svg viewBox="0 0 820 392" xmlns="http://www.w3.org/2000/svg" font-family="JetBrains Mono, monospace">
+              <!-- left axis arrow -->
+              <defs>
+                <marker id="ah" markerWidth="9" markerHeight="9" refX="4.5" refY="4.5" orient="auto"><path d="M1,1 L8,4.5 L1,8 Z" fill="#857a68"/></marker>
+              </defs>
+              <line x1="22" y1="36" x2="22" y2="356" stroke="#857a68" stroke-width="1.5" marker-start="url(#ah)" marker-end="url(#ah)"/>
+              <text transform="rotate(-90 22 90)" x="22" y="90" text-anchor="middle" fill="#857a68" font-size="11">FASTER · SMALLER</text>
+              <text transform="rotate(-90 22 305)" x="22" y="305" text-anchor="middle" fill="#857a68" font-size="11">SLOWER · LARGER</text>
+
+              <!-- bars (centered ~ cx=270) -->
+              <!-- RMEM -->
+              <rect x="210" y="28" width="120" height="52" rx="8" fill="#bd4f25"/>
+              <text x="270" y="50" text-anchor="middle" fill="#fff" font-size="13" font-weight="700">RMEM</text>
+              <text x="270" y="67" text-anchor="middle" fill="#ffe6db" font-size="10.5">registers</text>
+              <!-- TMEM (NEW) -->
+              <rect x="170" y="92" width="200" height="52" rx="8" fill="#fff5e9" stroke="#bd4f25" stroke-width="2.5"/>
+              <text x="270" y="114" text-anchor="middle" fill="#8f3713" font-size="13" font-weight="700">TMEM</text>
+              <text x="270" y="131" text-anchor="middle" fill="#a3563a" font-size="10.5">tensor memory</text>
+              <g transform="translate(372,96)"><rect width="44" height="20" rx="10" fill="#bd4f25"/><text x="22" y="14" text-anchor="middle" fill="#fff" font-size="10" font-weight="700">NEW</text></g>
+              <!-- SMEM -->
+              <rect x="135" y="156" width="270" height="52" rx="8" fill="#2f8a8a"/>
+              <text x="270" y="178" text-anchor="middle" fill="#fff" font-size="13" font-weight="700">SMEM</text>
+              <text x="270" y="195" text-anchor="middle" fill="#e2f4f4" font-size="10.5">shared memory (per SM)</text>
+              <!-- L2 -->
+              <rect x="95" y="220" width="350" height="52" rx="8" fill="#1d6b6b"/>
+              <text x="270" y="242" text-anchor="middle" fill="#fff" font-size="13" font-weight="700">L2 CACHE</text>
+              <text x="270" y="259" text-anchor="middle" fill="#d6ecec" font-size="10.5">shared by all SMs</text>
+              <!-- HBM -->
+              <rect x="45" y="284" width="450" height="52" rx="8" fill="#211c16"/>
+              <text x="270" y="306" text-anchor="middle" fill="#fff" font-size="13" font-weight="700">GMEM / HBM</text>
+              <text x="270" y="323" text-anchor="middle" fill="#cdc6b8" font-size="10.5">off-chip DRAM</text>
+
+              <!-- right annotations -->
+              <g font-size="11.5" fill="#4f463a">
+                <line x1="330" y1="54" x2="540" y2="54" stroke="#e0d8c6"/><text x="548" y="51" font-weight="700" fill="#bd4f25">≤256 / thread</text><text x="548" y="66" fill="#857a68">private, instant</text>
+                <line x1="370" y1="118" x2="540" y2="118" stroke="#e0d8c6"/><text x="548" y="115" font-weight="700" fill="#8f3713">256 KB / SM</text><text x="548" y="130" fill="#857a68">holds tensor-core output</text>
+                <line x1="405" y1="182" x2="540" y2="182" stroke="#e0d8c6"/><text x="548" y="179" font-weight="700" fill="#1d6b6b">128 B / clock read</text><text x="548" y="194" fill="#857a68">banked scratchpad</text>
+                <line x1="445" y1="246" x2="540" y2="246" stroke="#e0d8c6"/><text x="548" y="243" font-weight="700" fill="#1d6b6b">tens of MB</text><text x="548" y="258" fill="#857a68">automatic cache</text>
+                <line x1="495" y1="310" x2="540" y2="310" stroke="#e0d8c6"/><text x="548" y="307" font-weight="700">~180 GB</text><text x="548" y="322" fill="#857a68">huge but slow</text>
+              </g>
+            </svg>
+          </div>
+          <figcaption><b>Where data can sit</b> — tiny-and-fast at the top, huge-and-slow at the bottom. Wider means more room. The paper fights over two layers: <b>SMEM</b> (a small fast scratchpad that did <i>not</i> get faster on the new chip) and the brand-new <b>TMEM</b>, a place where the math engine can park its answers without using up the workers' tiny pockets.</figcaption>
+        </figure>
+
+        <p>Three names to know. <span class="term">HBM</span> (also called global memory) is the warehouse — about 180 gigabytes, lots of room, but slow to reach. <span class="term">SMEM</span> (shared memory) is the desk — a small, fast scratchpad that each team gets. And <span class="term">TMEM</span> (tensor memory) is <strong>brand new on this chip</strong> — a special spot where the math engine can drop its answers without clogging up the workers' tiny hands.</p>
+        <p>Why does this matter so much? Because on the new chip, the <em>desk</em> (SMEM) did <strong>not</strong> get any faster. The engine got twice as fast, but the speed of moving things on and off the desk stayed the same. Hold that thought — it's the bottleneck the paper keeps fighting.</p>
+
+        <h3>The math engine: "tensor cores"</h3>
+        <p>Inside every SM is a special piece of hardware called a <span class="term">tensor core</span>. Its only job is to multiply grids of numbers together (called <em>matrix multiply</em>) extremely fast. This is the "engine." Almost all the useful work in AI is matrix multiply, so this engine is what we want busy at all times.</p>
+        <p>The instruction that tells the tensor core to do one chunk of matrix multiply is called an <span class="term">MMA</span> (matrix multiply-accumulate). You'll see "MMA" a lot — just read it as "do a block of matrix math." On Blackwell, these tensor cores got <strong>twice as fast</strong> as the previous chip. That single fact is what set off the whole redesign.</p>
+
+        <h3>The slow special unit: exp</h3>
+        <p>Softmax (explained in §3) needs a math function called <code>exp()</code> — "e to the power of x." The chip has a small dedicated unit just for tricky functions like this, called the <span class="term">MUFU</span>. Here's the problem: the MUFU did <strong>not</strong> get faster on the new chip. It can only do a fixed, smallish number of <code>exp()</code>s each tick. So as the engine sped up, this little unit became a traffic jam.</p>
+
+        <h3>Doing many things at the same time</h3>
+        <p>A slow chip does one thing, finishes, then starts the next. A fast chip overlaps: it starts loading the next batch of data <em>while</em> still doing math on the current one. This overlap is called <span class="term">asynchrony</span> ("not waiting your turn").</p>
+        <p>FlashAttention-4 leans on this hard, using a method called <span class="term">warp specialization</span>: give different groups of workers different permanent jobs, so the jobs happen side by side instead of one after another.</p>
+
+        <div class="box analogy">
+          <p class="label"><span class="dot" style="background:var(--gold)"></span>A restaurant kitchen</p>
+          <p style="margin-bottom:0">A bad kitchen has one person chop, then cook, then plate, then start over. A good kitchen has a chopper, a cook, and a plater all working at once. The food flows through. Warp specialization is the good kitchen: one group of workers only fetches data, another only does math, another only does softmax. Nobody stands idle waiting for someone else to finish.</p>
+        </div>
+
+        <h3>Two teams teaming up: "2-CTA"</h3>
+        <p>One more new feature. On Blackwell, two neighboring teams (two SMs in the same cluster) can join forces on one big matrix multiply, each holding only <em>half</em> of the data. This is called <span class="term">2-CTA mode</span>. (A "CTA" is just another word for one team's block of workers.) Splitting the data in half means each team moves half as much across its desk — which, as we just learned, is the slow part. This trick is the star of the backward pass in §7.</p>
+
+        <h3>The actual numbers (for the curious)</h3>
+        <p>If you like seeing real figures, here are the key speeds of the B200. The big takeaway is in the last two rows: the math engine doubled, but the exp unit and the desk did not move at all.</p>
+        <div class="tbl-wrap">
+          <table>
+            <thead>
+              <tr><th>Hardware unit</th><th>B200 throughput (per clock, per SM)</th><th>vs. Hopper (H100)</th></tr>
+            </thead>
+            <tbody>
+              <tr><td><strong>Tensor core</strong> (BF16 MMA)</td><td class="num">8192 ops</td><td><span class="hl">2× faster</span> (was 4096)</td></tr>
+              <tr><td><strong>Exponential unit</strong> (MUFU)</td><td class="num">16 ops</td><td>unchanged (B300 will double to 32)</td></tr>
+              <tr><td><strong>Shared-memory read</strong> (SMEM)</td><td class="num">128 bytes</td><td>unchanged</td></tr>
+            </tbody>
+          </table>
+          <caption>Where the key number <b>8192</b> comes from, if you are curious: the chip's total math speed, divided by how fast it ticks and by how many cores it has.</caption>
+        </div>
+
+        <div class="box plain">
+          <p class="label"><span class="dot" style="background:var(--good)"></span>In plain words — the only takeaways from §2</p>
+          <ol style="margin-bottom:0">
+            <li>The chip is a crowd of ~148 small teams (SMs).</li>
+            <li>Fast storage is tiny; big storage is slow. Keep work close.</li>
+            <li>The <strong>math engine doubled in speed</strong>, but the <strong>desk (SMEM)</strong> and the <strong>exp unit</strong> did not. That mismatch is the whole story.</li>
+          </ol>
+        </div>
+      </section>
+
+      <!-- ===================== 3 ATTENTION ===================== -->
+      <section id="attn">
+        <div class="sec-head"><span class="sec-num">03</span><h2>What "attention" actually does</h2></div>
+        <p class="lead">We keep saying "attention" is the math we're speeding up. Let's see exactly what it is. It's simpler than it sounds: every word gathers useful information from the other words.</p>
+
+        <h3>The goal, in one sentence</h3>
+        <p>When a model reads "the cat sat on the mat," the word "sat" needs to know <em>who</em> sat. Attention lets "sat" look back at "cat" and pull in that meaning. Do this for every word, looking at every other word, and each word ends up understanding its context. That's attention.</p>
+
+        <h3>Three lists: Query, Key, Value</h3>
+        <p>To do this, the model turns each word into three little lists of numbers. The names come from how a search works:</p>
+        <ul>
+          <li><span class="term">Query (Q)</span> — what this word is <em>looking for</em>. ("I'm a verb; I want my subject.")</li>
+          <li><span class="term">Key (K)</span> — a label saying what this word <em>offers</em>. ("I'm a noun, a possible subject.")</li>
+          <li><span class="term">Value (V)</span> — the actual <em>information</em> this word will hand over if chosen.</li>
+        </ul>
+        <p>If you have <em>N</em> words, you get N queries, N keys, and N values. (The letter <em>N</em> just means "how many words." It will show up a lot.)</p>
+
+        <div class="box analogy">
+          <p class="label"><span class="dot" style="background:var(--gold)"></span>Like a library</p>
+          <p style="margin-bottom:0">Your <strong>query</strong> is what you want ("books about cats"). Each book has a <strong>key</strong> on its spine (its topic label). You compare your query to every spine to see how well it matches. Then you actually read the <strong>value</strong> — the contents — of the books that matched best, paying more attention to the better matches.</p>
+        </div>
+
+        <h3>The three steps</h3>
+        <p>Attention is just three steps, done with the three lists:</p>
+        <ol>
+          <li><strong>Compare.</strong> For every query, score how well it matches every key. More overlap means a higher score. This gives a big grid of scores called <span class="term">S</span> — one score for every (word, word) pair.</li>
+          <li><strong>Soften.</strong> Turn each row of raw scores into nice weights that add up to 1, using a step called <span class="term">softmax</span>. Big scores become big weights; small scores become tiny ones. The result is a grid of weights called <span class="term">P</span> (for probabilities).</li>
+          <li><strong>Blend.</strong> For each word, take a weighted mix of all the values, using those weights. Words you matched strongly contribute more. The result is the output, <span class="term">O</span> — each word's new, context-aware meaning.</li>
+        </ol>
+        <figure>
+          <div class="fig-frame">
+            <svg viewBox="0 0 820 268" xmlns="http://www.w3.org/2000/svg" font-family="JetBrains Mono, monospace">
+              <defs>
+                <marker id="ar" markerWidth="10" markerHeight="10" refX="7" refY="4" orient="auto"><path d="M0,0 L9,4 L0,8 Z" fill="#8f3713"/></marker>
+              </defs>
+              <!-- inputs -->
+              <g>
+                <rect x="20" y="36" width="64" height="40" rx="6" fill="#efe7d6" stroke="#cabfa6"/><text x="52" y="60" text-anchor="middle" font-size="15" font-weight="700" fill="#211c16">Q</text><text x="52" y="92" text-anchor="middle" font-size="10.5" fill="#857a68">N × d</text>
+                <rect x="20" y="110" width="64" height="40" rx="6" fill="#efe7d6" stroke="#cabfa6"/><text x="52" y="134" text-anchor="middle" font-size="15" font-weight="700" fill="#211c16">K</text><text x="52" y="166" text-anchor="middle" font-size="10.5" fill="#857a68">N × d</text>
+                <rect x="20" y="200" width="64" height="40" rx="6" fill="#efe7d6" stroke="#cabfa6"/><text x="52" y="224" text-anchor="middle" font-size="15" font-weight="700" fill="#211c16">V</text><text x="52" y="196" text-anchor="middle" font-size="10.5" fill="#857a68">N × d</text>
+              </g>
+              <!-- arrows to S -->
+              <path d="M88,56 C150,56 150,118 214,118" fill="none" stroke="#8f3713" stroke-width="1.6" marker-end="url(#ar)"/>
+              <path d="M88,130 C150,130 150,124 214,124" fill="none" stroke="#8f3713" stroke-width="1.6" marker-end="url(#ar)"/>
+              <g transform="translate(150,86)"><rect width="58" height="22" rx="11" fill="#bd4f25"/><text x="29" y="15" text-anchor="middle" fill="#fff" font-size="10.5" font-weight="700">α·QKᵀ</text></g>
+              <!-- S -->
+              <rect x="220" y="58" width="118" height="118" rx="8" fill="#fbe8df" stroke="#bd4f25" stroke-width="2"/>
+              <text x="279" y="112" text-anchor="middle" font-size="20" font-weight="700" fill="#8f3713">S</text>
+              <text x="279" y="134" text-anchor="middle" font-size="11" fill="#a3563a">scores</text>
+              <text x="279" y="194" text-anchor="middle" font-size="10.5" fill="#857a68">N × N  ← huge</text>
+              <!-- arrow S->P -->
+              <path d="M342,117 L432,117" fill="none" stroke="#8f3713" stroke-width="1.6" marker-end="url(#ar)"/>
+              <g transform="translate(352,86)"><rect width="68" height="22" rx="11" fill="#6a4a86"/><text x="34" y="15" text-anchor="middle" fill="#fff" font-size="10" font-weight="700">softmax</text></g>
+              <!-- P -->
+              <rect x="438" y="58" width="118" height="118" rx="8" fill="#fbe8df" stroke="#bd4f25" stroke-width="2"/>
+              <text x="497" y="112" text-anchor="middle" font-size="20" font-weight="700" fill="#8f3713">P</text>
+              <text x="497" y="134" text-anchor="middle" font-size="11" fill="#a3563a">weights</text>
+              <text x="497" y="194" text-anchor="middle" font-size="10.5" fill="#857a68">N × N  ← huge</text>
+              <!-- V path to PV -->
+              <path d="M84,228 C400,256 560,256 626,150" fill="none" stroke="#8f3713" stroke-width="1.6" marker-end="url(#ar)" stroke-dasharray="5 4"/>
+              <!-- arrow P->O -->
+              <path d="M560,117 C600,117 600,120 626,120" fill="none" stroke="#8f3713" stroke-width="1.6" marker-end="url(#ar)"/>
+              <g transform="translate(572,86)"><rect width="48" height="22" rx="11" fill="#bd4f25"/><text x="24" y="15" text-anchor="middle" fill="#fff" font-size="10.5" font-weight="700">P·V</text></g>
+              <!-- O -->
+              <rect x="632" y="92" width="70" height="56" rx="7" fill="#dff0ea" stroke="#1d6b6b" stroke-width="2"/>
+              <text x="667" y="118" text-anchor="middle" font-size="18" font-weight="700" fill="#0f4a4a">O</text>
+              <text x="667" y="134" text-anchor="middle" font-size="10" fill="#1d6b6b">output</text>
+              <text x="667" y="166" text-anchor="middle" font-size="10.5" fill="#857a68">N × d</text>
+            </svg>
+          </div>
+          <figcaption><b>What attention computes.</b> The two orange boxes, $S$ and $P$, are huge — one row and one column for every word. For a long text that is over a billion numbers each. Storing them would be a disaster, and avoiding that is the whole point of FlashAttention (§4).</figcaption>
+        </figure>
+
+        <p>Look hard at the two orange boxes in that picture, <strong>S</strong> and <strong>P</strong>. They have a row <em>and</em> a column for every single word. So if your text has 32,000 words, each of these grids holds <strong>32,000 × 32,000 ≈ a billion numbers</strong>. That is far too big to keep in fast storage. Remembering this pain is the key to the next section.</p>
+
+        <h3>One wrinkle: softmax can overflow</h3>
+        <p>Softmax works by raising <code>e</code> to the power of each score (the <code>exp()</code> step). If a score is large, <code>exp()</code> of it is astronomically huge — big enough to break the computer's number format. The fix is a simple, exact trick: before doing <code>exp()</code>, find the biggest score in the row and subtract it from everything. This keeps the numbers small and the answer comes out <em>exactly</em> the same. This little "subtract the max" habit becomes a surprisingly big deal in §6.</p>
+
+        <div class="box math">
+          <p class="label"><span class="dot" style="background:var(--violet)"></span>The same three steps, as formulas (skip if you like)</p>
+          <p style="margin-bottom:0">$S = \alpha\, Q K^\top \qquad P = \text{softmax}(S) \qquad O = P V$. The little $\alpha$ is just a fixed scaling number. You never need these symbols to follow the notes — they're here for completeness.</p>
+        </div>
+
+        <h3>Training needs a "backward" version too</h3>
+        <p>Everything above is the model <em>reading</em> — called the <strong>forward pass</strong>. But to <em>train</em> a model, you also run everything in reverse to figure out how to adjust it. This is the <strong>backward pass</strong>, and it computes "gradients" (nudges) for Q, K, and V.</p>
+        <p>You don't need the details yet. Just keep one fact: the backward pass needs <strong>five</strong> matrix multiplies, while the forward pass needs only <strong>two</strong>. More multiplies means more strain on the chip — which is exactly why the backward pass gets its own hard section (§7).</p>
+
+        <div class="box plain">
+          <p class="label"><span class="dot" style="background:var(--good)"></span>In plain words</p>
+          <p style="margin-bottom:0">Attention = compare, soften, blend. Every word looks at every other word, which makes two giant grids (S and P) and explains why it's slow. Reading is the "forward" pass (2 multiplies); training adds a "backward" pass (5 multiplies).</p>
+        </div>
+      </section>
+
+      <!-- ===================== 4 FLASH IDEA ===================== -->
+      <section id="flash">
+        <div class="sec-head"><span class="sec-num">04</span><h2>The FlashAttention idea</h2></div>
+        <p class="lead">We just saw the problem: attention builds two giant grids that don't fit in fast storage. The original FlashAttention (2022) solved this, and every version since builds on its one clever move.</p>
+
+        <h3>The dumb way, and why it's slow</h3>
+        <p>The obvious approach builds the whole score grid S, writes it out to the big slow warehouse (HBM), reads it back to do softmax, writes P back out, reads it again to blend with V… Each of those is a slow round-trip to the warehouse, for a billion numbers. The chip's engine spends almost all its time <em>waiting for data to arrive</em>. The storage trips, not the math, are the bottleneck.</p>
+
+        <div class="box def">
+          <p class="label"><span class="dot" style="background:var(--teal)"></span>The key realization: count the trips, not the math</p>
+          <p style="margin-bottom:0">FlashAttention's founding insight is that for this problem, <strong>moving data is the expensive part, not the arithmetic</strong>. So the goal isn't "do less math" — it's "make fewer trips to slow storage." The authors call this being <em>IO-aware</em> ("IO" = input/output, i.e. moving data in and out).</p>
+        </div>
+
+        <h3>The fix: work in small tiles, never store the whole grid</h3>
+        <p>Instead of building the giant grid all at once, FlashAttention chops the keys and values into small blocks called <span class="term">tiles</span> that each fit on the desk (SMEM). It processes one tile at a time and keeps a running answer. The huge grids S and P are <em>never</em> fully built or stored — they only ever exist one small tile at a time, right there in fast storage. This single change removes nearly all the slow warehouse trips.</p>
+
+        <h3>The tricky bit: softmax over tiles</h3>
+        <p>There's a catch. Softmax needs to divide by the total over a <em>whole</em> row, and it needs the row's biggest value (for the "subtract the max" safety trick). But if you only ever see one small tile at a time, you don't know the row's true total or its true maximum yet. So how can you softmax as you go?</p>
+        <p>The answer is a method called <span class="term">online softmax</span>. You keep three small running notes for each row: the biggest value <em>so far</em>, the running total <em>so far</em>, and the partial answer <em>so far</em>. When a new tile arrives, you update all three.</p>
+        <figure>
+          <div class="fig-frame">
+            <svg viewBox="0 0 820 256" xmlns="http://www.w3.org/2000/svg" font-family="JetBrains Mono, monospace">
+              <defs>
+                <marker id="ag" markerWidth="10" markerHeight="10" refX="7" refY="4" orient="auto"><path d="M0,0 L9,4 L0,8 Z" fill="#1d6b6b"/></marker>
+              </defs>
+              <text x="20" y="26" font-size="12" fill="#857a68">KV tiles stream in one at a time →</text>
+              <!-- KV blocks -->
+              <g>
+                <rect x="20"  y="38" width="76" height="50" rx="7" fill="#dff0ea" stroke="#1d6b6b"/><text x="58"  y="68" text-anchor="middle" font-size="13" font-weight="700" fill="#0f4a4a">K₁V₁</text>
+                <rect x="108" y="38" width="76" height="50" rx="7" fill="#dff0ea" stroke="#1d6b6b"/><text x="146" y="68" text-anchor="middle" font-size="13" font-weight="700" fill="#0f4a4a">K₂V₂</text>
+                <rect x="196" y="38" width="76" height="50" rx="7" fill="#dff0ea" stroke="#1d6b6b"/><text x="234" y="68" text-anchor="middle" font-size="13" font-weight="700" fill="#0f4a4a">K₃V₃</text>
+                <text x="300" y="68" font-size="16" fill="#857a68">···</text>
+                <rect x="320" y="38" width="76" height="50" rx="7" fill="#dff0ea" stroke="#1d6b6b"/><text x="358" y="68" text-anchor="middle" font-size="13" font-weight="700" fill="#0f4a4a">K_B V_B</text>
+              </g>
+              <!-- arrow down to accumulator -->
+              <path d="M210,92 C210,120 360,120 430,140" fill="none" stroke="#1d6b6b" stroke-width="1.6" marker-end="url(#ag)"/>
+              <text x="250" y="118" font-size="11" fill="#8f3713">update running state each block</text>
+              <!-- accumulator -->
+              <rect x="430" y="48" width="210" height="150" rx="12" fill="#fff5e9" stroke="#bd4f25" stroke-width="2"/>
+              <text x="535" y="72" text-anchor="middle" font-size="12" font-weight="700" fill="#8f3713">RUNNING STATE  (per row)</text>
+              <g font-size="14" fill="#211c16">
+                <text x="452" y="104"><tspan font-weight="700" fill="#bd4f25">m</tspan>  running max</text>
+                <text x="452" y="134"><tspan font-weight="700" fill="#bd4f25">ℓ</tspan>  running sum (denom)</text>
+                <text x="452" y="164"><tspan font-weight="700" fill="#bd4f25">O</tspan>  partial output</text>
+              </g>
+              <text x="535" y="190" text-anchor="middle" font-size="10.5" fill="#a3563a">rescale by e^(m_old − m_new) when max grows</text>
+              <!-- final -->
+              <path d="M640,123 L690,123" fill="none" stroke="#1d6b6b" stroke-width="1.6" marker-end="url(#ag)"/>
+              <rect x="694" y="98" width="104" height="50" rx="8" fill="#dff0ea" stroke="#1d6b6b" stroke-width="2"/>
+              <text x="746" y="120" text-anchor="middle" font-size="12" font-weight="700" fill="#0f4a4a">O / ℓ</text>
+              <text x="746" y="137" text-anchor="middle" font-size="10" fill="#1d6b6b">final, once</text>
+            </svg>
+          </div>
+          <figcaption><b>Softmax, a little at a time.</b> Each row keeps just a few running numbers — the biggest value so far, a running total, and a partial answer — updated as new blocks of data slide past. The giant score table is never stored. One final tidy-up gives the exact answer.</figcaption>
+        </figure>
+
+        <div class="box analogy">
+          <p class="label"><span class="dot" style="background:var(--gold)"></span>Grading on a moving curve</p>
+          <p style="margin-bottom:0">Imagine grading exams as they come in, on a curve set by the top score. You grade the first stack against the best score you've seen. Then a new stack arrives with an even higher score. You don't re-grade everything from scratch — you just <em>adjust</em> the earlier grades down a notch to match the new top. Online softmax does exactly this: when a new tile contains a bigger maximum, it gently rescales the running total and partial answer to match. At the very end, one final adjustment makes everything exactly correct.</p>
+        </div>
+
+        <p>That rescaling step — "adjust the earlier results because the maximum grew" — looks small here, but remember it. In §6 the paper finds a clever way to skip most of it.</p>
+
+        <h3>What versions 2 and 3 added</h3>
+        <p>The idea was so good it kept getting refined. <strong>FlashAttention-2</strong> (2023) reorganized the work so more of the chip's teams stay busy at once. <strong>FlashAttention-3</strong> (2024) taught the trick to overlap loading and computing on the previous chip (Hopper), and added a faster low-precision number mode. Each version chased the slow part of <em>its</em> chip.</p>
+
+        <div class="box plain">
+          <p class="label"><span class="dot" style="background:var(--good)"></span>In plain words</p>
+          <p style="margin-bottom:0">Don't build the giant grids. Slice the work into desk-sized tiles, keep a few running numbers per row, and fix them up as you go. This turns a flood of slow storage trips into almost none. Everything after this is about doing those tiles as fast as the new chip allows.</p>
+        </div>
+      </section>
+
+      <!-- ===================== 5 ASYMMETRY ===================== -->
+      <section id="asym">
+        <div class="sec-head"><span class="sec-num">05</span><h2>The main insight: the slow part moved</h2></div>
+        <p class="lead">This is the idea the whole paper is built on. Now that you know the chip (§2) and the math (§3–§4), it's easy. Here it is: the math engine got twice as fast, but the parts that feed it did not — so for the first time, the math is no longer the slow part.</p>
+
+        <h3>The lopsided upgrade, in one picture</h3>
+        <p>Compared to the previous chip, here's how the three things that matter changed:</p>
+        <figure>
+          <div class="fig-frame">
+            <svg viewBox="0 0 820 312" xmlns="http://www.w3.org/2000/svg" font-family="JetBrains Mono, monospace">
+              <!-- axes -->
+              <line x1="120" y1="40" x2="120" y2="244" stroke="#cabfa6" stroke-width="1.5"/>
+              <line x1="120" y1="244" x2="780" y2="244" stroke="#cabfa6" stroke-width="1.5"/>
+              <!-- gridlines -->
+              <line x1="120" y1="164" x2="780" y2="164" stroke="#e0d8c6" stroke-dasharray="4 4"/>
+              <line x1="120" y1="84" x2="780" y2="84" stroke="#e0d8c6" stroke-dasharray="4 4"/>
+              <g font-size="12" fill="#857a68" text-anchor="end">
+                <text x="110" y="248">0×</text>
+                <text x="110" y="168">1×</text>
+                <text x="110" y="88">2×</text>
+              </g>
+              <text transform="rotate(-90 36 142)" x="36" y="142" text-anchor="middle" font-size="12" fill="#4f463a">Blackwell ÷ Hopper throughput</text>
+              <!-- baseline note -->
+              <text x="775" y="160" text-anchor="end" font-size="10.5" fill="#9a740f">← "no improvement" line</text>
+
+              <!-- bars: 1unit=80px from y=244 -->
+              <!-- Tensor core 2.0 -->
+              <rect x="180" y="84" width="120" height="160" rx="6" fill="#bd4f25"/>
+              <text x="240" y="76" text-anchor="middle" font-size="20" font-weight="700" fill="#8f3713">2.0×</text>
+              <text x="240" y="266" text-anchor="middle" font-size="13" font-weight="700" fill="#211c16">Tensor cores</text>
+              <text x="240" y="284" text-anchor="middle" font-size="10.5" fill="#857a68">4096 → 8192 ops/clk</text>
+              <!-- Exp 1.0 -->
+              <rect x="400" y="164" width="120" height="80" rx="6" fill="#6a4a86"/>
+              <text x="460" y="156" text-anchor="middle" font-size="20" font-weight="700" fill="#6a4a86">1.0×</text>
+              <text x="460" y="266" text-anchor="middle" font-size="13" font-weight="700" fill="#211c16">Exponential unit</text>
+              <text x="460" y="284" text-anchor="middle" font-size="10.5" fill="#857a68">16 → 16 ops/clk</text>
+              <!-- SMEM 1.0 -->
+              <rect x="620" y="164" width="120" height="80" rx="6" fill="#1d6b6b"/>
+              <text x="680" y="156" text-anchor="middle" font-size="20" font-weight="700" fill="#0f4a4a">1.0×</text>
+              <text x="680" y="266" text-anchor="middle" font-size="13" font-weight="700" fill="#211c16">Shared memory</text>
+              <text x="680" y="284" text-anchor="middle" font-size="10.5" fill="#857a68">128 → 128 B/clk</text>
+            </svg>
+          </div>
+          <figcaption><b>Lopsided chip upgrades.</b> The matrix-math unit got twice as fast. The units that feed it (softmax and data movement) did not move at all. Work that was balanced on the old chip is now lopsided on the new one — the slow spot is no longer the math.</figcaption>
+        </figure>
+
+        <p>The math engine: <strong>2× faster</strong>. The exp unit: <strong>no change</strong>. Moving data on the desk: <strong>no change</strong>. On the old chip these three were roughly balanced, so attention was limited by the math — fine, because the math was the useful work. On the new chip, the math finishes early and then sits waiting for the other two. The slow part has moved <em>off</em> the math.</p>
+
+        <h3>A simple way to find the slow part: the "roofline"</h3>
+        <p>To reason about speed, the authors use a back-of-the-envelope method. For a chunk of work, write down how long each part would take on its own: the math, the data movement, and the exp. Then ask one question — do these parts run <em>at the same time</em>, or do they <em>take turns?</em></p>
+
+        <div class="box key">
+          <p class="label"><span class="dot" style="background:var(--rust)"></span>The rule that drives every design choice</p>
+          <p>If the parts <strong>take turns</strong>, the total time is all of them <em>added up</em> (a sum). If the parts run <strong>at the same time</strong>, the total time is just the <em>single slowest one</em> (a max) — the others hide behind it.</p>
+          <p style="margin-bottom:0">A sum is much bigger than a max. So the number-one job is always: <strong>make things overlap</strong>, to turn the sum into a max. Then, separately, attack whatever the slowest single part is.</p>
+        </div>
+
+        <h3>What this means for the forward pass</h3>
+        <p>The forward pass has three kinds of work per tile: the matrix math, moving data across the desk, and the exp step in softmax. Let's see how long each takes for a typical tile (measured in "ticks," the chip's clock beats):</p>
+        <div class="tbl-wrap">
+          <table>
+            <thead>
+              <tr><th>Resource (cycles)</th><th>Tile 128×128×128</th><th>Tile 256×128×128</th></tr>
+            </thead>
+            <tbody>
+              <tr><td>MMA compute</td><td class="num"><span class="hl">1024</span></td><td class="num"><span class="hl">2048</span></td></tr>
+              <tr><td>Shared memory</td><td class="num">768</td><td class="num">1536</td></tr>
+              <tr><td>Exponential unit</td><td class="num"><span class="hl">1024</span></td><td class="num"><span class="hl">2048</span></td></tr>
+            </tbody>
+          </table>
+          <caption>Table 1. The exp step <b>ties</b> the math engine for slowest — even though the math engine here is already twice as fast. Moving data is close behind.</caption>
+        </div>
+
+        <p>Read the first row. The math takes about 1024 ticks. Moving data takes about 768. And exp <em>also</em> takes about 1024. So the exp step is now <strong>tied with the math</strong> as the slowest thing — even though the math engine is already twice as fast as before. That is the surprise that started the project. On the old chip, exp was comfortably faster than the math and nobody worried about it. Not anymore.</p>
+
+        <h3>The three marching orders</h3>
+        <p>From this one table, the entire rest of the paper follows. The authors give themselves three jobs:</p>
+        <ol>
+          <li><strong>Overlap everything.</strong> Make the math, the data movement, and the exp all happen at the same time, so the total is the slowest one and not the sum. (This is §6 and §7.)</li>
+          <li><strong>Make exp faster.</strong> Since exp now ties for slowest, find a way to do more exp per tick. (This is the "fake it on the side" trick in §6.)</li>
+          <li><strong>Do less data movement.</strong> Cut any data trips you don't truly need. (This is the skip-the-clean-up trick in §6, and the two-core trick in §7.)</li>
+        </ol>
+
+        <p>One more note, because it matters in §7: the <em>backward</em> pass is a different story. There, the slowest part isn't exp — it's <strong>moving data across the desk</strong> (it needs about 30% more time than the math). So the backward pass focuses its energy on cutting data movement.</p>
+
+        <div class="box plain">
+          <p class="label"><span class="dot" style="background:var(--good)"></span>In plain words</p>
+          <p style="margin-bottom:0">List how long each part takes. Overlapping makes the total equal to the slowest part instead of the sum, so overlap first. After overlapping, the slowest part of the forward pass is exp (so speed exp up), and the slowest part of the backward pass is moving data (so move less of it).</p>
+        </div>
+      </section>
+
+      <!-- ===================== 6 FORWARD ===================== -->
+      <section id="fwd">
+        <div class="sec-head"><span class="sec-num">06</span><h2>Speeding up the forward pass</h2></div>
+        <p class="lead">Now we cash in the three marching orders from §5, one at a time, for the reading (forward) pass. Each trick below is just one of those orders made real.</p>
+
+        <h3>6.1 &nbsp; Overlap everything: the "ping-pong" plan</h3>
+        <p><em>(This is marching order #1: turn the sum into a max.)</em></p>
+        <p>Remember the restaurant kitchen from §2. FlashAttention-4 splits the SM's workers into <strong>four groups, each with one permanent job</strong>:</p>
+        <ul>
+          <li>One group only <strong>drives the math engine and loads data</strong> — it keeps the tensor cores fed nonstop.</li>
+          <li>Two groups <strong>handle softmax</strong> (the exp work). Why two? So they can <em>take turns</em> on the slow exp unit. While one group is using the exp unit, the other is doing its other prep. They leapfrog, so the exp unit is never idle.</li>
+          <li>One group only does the <strong>clean-up rescaling</strong> — pulled off to the side so it never holds up the main line.</li>
+        </ul>
+        <p>The result is a smooth flow, like the good kitchen. The math engine runs wall-to-wall. Each group's softmax hides behind the other group's math. The clean-up happens in a side lane. Here's the timeline:</p>
+        <figure>
+          <div class="fig-frame">
+            <svg viewBox="0 0 820 286" xmlns="http://www.w3.org/2000/svg" font-family="JetBrains Mono, monospace">
+              <!-- lane labels -->
+              <g font-size="12" fill="#4f463a" text-anchor="end">
+                <text x="150" y="60">Tensor cores</text>
+                <text x="150" y="114">Softmax WG-0</text>
+                <text x="150" y="168">Softmax WG-1</text>
+                <text x="150" y="222">Correction WG</text>
+              </g>
+              <!-- time axis -->
+              <line x1="160" y1="38" x2="160" y2="248" stroke="#cabfa6"/>
+              <text x="160" y="266" font-size="11" fill="#857a68">time →</text>
+              <!-- MMA lane: continuous -->
+              <g>
+                <rect x="162" y="44" width="156" height="34" rx="5" fill="#bd4f25"/><text x="240" y="66" text-anchor="middle" fill="#fff" font-size="12" font-weight="700">QKᵀ (H)</text>
+                <rect x="320" y="44" width="156" height="34" rx="5" fill="#d2682f"/><text x="398" y="66" text-anchor="middle" fill="#fff" font-size="11.5" font-weight="700">PV(H) · QKᵀ(L)</text>
+                <rect x="478" y="44" width="156" height="34" rx="5" fill="#bd4f25"/><text x="556" y="66" text-anchor="middle" fill="#fff" font-size="11.5" font-weight="700">PV(L) · QKᵀ(H')</text>
+                <rect x="636" y="44" width="156" height="34" rx="5" fill="#d2682f"/><text x="714" y="66" text-anchor="middle" fill="#fff" font-size="12" font-weight="700">PV(H') …</text>
+              </g>
+              <!-- softmax 0 -->
+              <rect x="320" y="98" width="156" height="34" rx="5" fill="#6a4a86"/><text x="398" y="120" text-anchor="middle" fill="#fff" font-size="12" font-weight="700">softmax (H)</text>
+              <rect x="636" y="98" width="156" height="34" rx="5" fill="#6a4a86"/><text x="714" y="120" text-anchor="middle" fill="#fff" font-size="12" font-weight="700">softmax (H')</text>
+              <!-- softmax 1 (staggered) -->
+              <rect x="478" y="152" width="156" height="34" rx="5" fill="#8a6aa8"/><text x="556" y="174" text-anchor="middle" fill="#fff" font-size="12" font-weight="700">softmax (L)</text>
+              <!-- correction -->
+              <rect x="478" y="206" width="156" height="34" rx="5" fill="#1d6b6b"/><text x="556" y="228" text-anchor="middle" fill="#fff" font-size="12" font-weight="700">rescale O (H)</text>
+              <rect x="636" y="206" width="156" height="34" rx="5" fill="#2f8a8a"/><text x="714" y="228" text-anchor="middle" fill="#fff" font-size="12" font-weight="700">rescale O (L)</text>
+              <!-- annotation -->
+              <text x="240" y="96" font-size="10.5" fill="#8f3713" font-style="italic">tensor cores never idle ↑</text>
+            </svg>
+          </div>
+          <figcaption><b>The ping-pong plan (simplified).</b> Two batches of work, H and L, take turns. The math lane (orange) stays busy the whole time. While one batch does its softmax (purple), the other does its matrix math — so the softmax “hides” behind the math. The clean-up step (teal) is moved aside so it never blocks the main line.</figcaption>
+        </figure>
+
+        <p>This is the "turn the sum into a max" idea from §5, built into the schedule. Instead of math, <em>then</em> softmax, <em>then</em> clean-up (a slow sum), all three run at once (a fast max). The clever part that makes it possible is the new <strong>TMEM</strong> from §2: because the math engine can park its answers in TMEM instead of in the workers' tiny hands, the workers are free to keep doing other things at the same time.</p>
+
+        <div class="box plain">
+          <p class="label"><span class="dot" style="background:var(--good)"></span>In plain words</p>
+          <p style="margin-bottom:0">Give four worker-groups four fixed jobs. Two of them share the slow exp unit by taking turns. Everything runs side by side, so the math engine never waits.</p>
+        </div>
+
+        <h3>6.2 &nbsp; Make exp faster: do it two ways at once</h3>
+        <p><em>(This is marching order #2: exp now ties for slowest, so get more of it done.)</em></p>
+        <p>The exp unit (the MUFU from §2) is small and already maxed out. You can't make it faster. But here's the trick: the chip's <em>normal</em> math units are often sitting idle during softmax. So why not also compute some exp on <em>them</em>, by faking it? Real exp unit and faked exp running side by side means more exp finished per tick.</p>
+        <p>How do you fake exp? You lean on how computers store numbers. A number is kept as a value times "2 to some power," and that power lives in its own little slot. Now, <code>exp(x)</code> can be rewritten as "2 to the power of something," and any power splits into a whole-number part plus a leftover fraction:</p>
+        <ul>
+          <li>The <strong>whole-number part</strong> is almost free. Raising 2 to a whole number just means writing that number into the power slot — a tiny shuffle of bits, no real math.</li>
+          <li>The <strong>leftover fraction</strong> (a number between 0 and 1) is handled by a short formula — just a handful of multiply-and-add steps, which the idle math units do easily.</li>
+        </ul>
+        <figure>
+          <div class="fig-frame">
+            <svg viewBox="0 0 820 270" xmlns="http://www.w3.org/2000/svg" font-family="JetBrains Mono, monospace">
+              <defs>
+                <marker id="ae" markerWidth="9" markerHeight="9" refX="6.5" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 Z" fill="#857a68"/></marker>
+              </defs>
+              <!-- input -->
+              <rect x="30" y="108" width="120" height="50" rx="9" fill="#211c16"/>
+              <text x="90" y="130" text-anchor="middle" fill="#fff" font-size="14" font-weight="700">2ˣ</text>
+              <text x="90" y="148" text-anchor="middle" fill="#cdc6b8" font-size="10">want this</text>
+              <!-- split -->
+              <path d="M150,124 C190,124 190,72 232,72" fill="none" stroke="#857a68" stroke-width="1.5" marker-end="url(#ae)"/>
+              <path d="M150,142 C190,142 190,196 232,196" fill="none" stroke="#857a68" stroke-width="1.5" marker-end="url(#ae)"/>
+              <text x="172" y="100" font-size="11" fill="#857a68">⌊x⌋</text>
+              <text x="172" y="184" font-size="11" fill="#857a68">x−⌊x⌋</text>
+              <!-- integer path -->
+              <rect x="234" y="48" width="250" height="50" rx="9" fill="#e7eef0" stroke="#1d6b6b" stroke-width="1.5"/>
+              <text x="359" y="68" text-anchor="middle" fill="#0f4a4a" font-size="12" font-weight="700">shift into IEEE-754 exponent bits</text>
+              <text x="359" y="85" text-anchor="middle" fill="#1d6b6b" font-size="10.5">cheap integer-ALU op  →  2^⌊x⌋</text>
+              <!-- frac path -->
+              <rect x="234" y="170" width="250" height="52" rx="9" fill="#efe9f3" stroke="#6a4a86" stroke-width="1.5"/>
+              <text x="359" y="190" text-anchor="middle" fill="#6a4a86" font-size="12" font-weight="700">polynomial  p₀+p₁x+p₂x²+…</text>
+              <text x="359" y="207" text-anchor="middle" fill="#6a4a86" font-size="10.5">Horner + FMA units  →  2^frac</text>
+              <!-- combine -->
+              <path d="M484,73 C540,73 540,120 582,120" fill="none" stroke="#857a68" stroke-width="1.5" marker-end="url(#ae)"/>
+              <path d="M484,196 C540,196 540,134 582,134" fill="none" stroke="#857a68" stroke-width="1.5" marker-end="url(#ae)"/>
+              <rect x="584" y="104" width="62" height="46" rx="9" fill="#bd4f25"/>
+              <text x="615" y="132" text-anchor="middle" fill="#fff" font-size="18" font-weight="700">×</text>
+              <path d="M646,127 L692,127" fill="none" stroke="#857a68" stroke-width="1.5" marker-end="url(#ae)"/>
+              <rect x="694" y="102" width="104" height="50" rx="9" fill="#211c16"/>
+              <text x="746" y="124" text-anchor="middle" fill="#fff" font-size="14" font-weight="700">2ˣ</text>
+              <text x="746" y="141" text-anchor="middle" fill="#cdc6b8" font-size="10">on FMA units</text>
+            </svg>
+          </div>
+          <figcaption><b>Faking the exp step.</b> Any “2 to the power x” splits into a whole-number part and a leftover part. The whole-number part is almost free — a tiny trick on how the number is stored. The leftover part is a short formula run on math units that would otherwise sit idle. Running this next to the real exp unit means more exp gets done each tick.</figcaption>
+        </figure>
+
+        <p>How fancy does that short formula need to be? Barely fancy at all. The chip does this math in a low-precision number format called <strong>BF16</strong>, which is a bit rough — it rounds every number a little. It turns out that rounding error is <em>bigger</em> than the error from even a very short formula. So a longer, more accurate formula would be wasted effort. The numbers:</p>
+        <div class="tbl-wrap">
+          <table>
+            <thead>
+              <tr><th>Method</th><th>Max error (FP32, raw)</th><th>Max error (after BF16 rounding)</th></tr>
+            </thead>
+            <tbody>
+              <tr><td>Hardware <code>MUFU.EX2</code></td><td class="num">1.41 × 10⁻⁷</td><td class="num">3.89 × 10⁻³</td></tr>
+              <tr><td>Polynomial, degree 3</td><td class="num">8.77 × 10⁻⁵</td><td class="num">3.90 × 10⁻³</td></tr>
+              <tr><td>Polynomial, degree 4</td><td class="num">3.05 × 10⁻⁶</td><td class="num">3.89 × 10⁻³</td></tr>
+              <tr><td>Polynomial, degree 5</td><td class="num">1.44 × 10⁻⁷</td><td class="num">3.89 × 10⁻³</td></tr>
+            </tbody>
+          </table>
+          <caption>Table 2. Ignore the middle column. The <b>right column is what matters</b>: once you round to the number format the chip really uses (BF16), every choice lands at about the same tiny error. That rounding error is larger than the formula's own error — so the short, cheap formula (degree 3) is plenty.</caption>
+        </div>
+
+        <p>So a tiny "degree-3" formula (three steps) is plenty. And FlashAttention-4 doesn't fake <em>all</em> the exp — just a slice of it (roughly 10–25%), tuned so the real exp unit and the faked exp finish at the same time and neither waits for the other.</p>
+
+        <div class="box plain">
+          <p class="label"><span class="dot" style="background:var(--good)"></span>In plain words</p>
+          <p style="margin-bottom:0">The exp unit is maxed out, so also fake some exp on the idle math units. Faking it is cheap: one near-free bit trick plus a three-step formula. Run both at once and more exp gets done. Because the chip's numbers are rough anyway, the cheap formula is accurate enough.</p>
+        </div>
+
+        <h3>6.3 &nbsp; Do less work: skip the clean-up when you can</h3>
+        <p><em>(This is marching order #3: cut work you don't truly need.)</em></p>
+        <p>Back in §4 we met the "rescale" step: when a new tile holds a bigger maximum than before, you adjust the running answer to match. That adjustment is a multiply over the whole running output — not huge, but it adds up over thousands of tiles. The authors noticed two things that let them skip most of it:</p>
+        <ol>
+          <li><strong>You only need to rescale when the maximum actually grows.</strong> If a new tile has nothing bigger than what you've seen, there is simply nothing to adjust. Skip it.</li>
+          <li><strong>Even when it grows a little, you can wait.</strong> As long as the growth stays under a set limit, the numbers remain safely small, so you can keep using the old maximum and just <em>remember</em> how much adjusting you've put off. One final fix at the very end settles the whole bill exactly.</li>
+        </ol>
+        <figure>
+          <div class="fig-frame">
+            <svg viewBox="0 0 820 232" xmlns="http://www.w3.org/2000/svg" font-family="JetBrains Mono, monospace">
+              <defs>
+                <marker id="ac" markerWidth="9" markerHeight="9" refX="6.5" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 Z" fill="#857a68"/></marker>
+              </defs>
+              <!-- new block -->
+              <rect x="24" y="92" width="150" height="48" rx="9" fill="#dff0ea" stroke="#1d6b6b"/>
+              <text x="99" y="113" text-anchor="middle" fill="#0f4a4a" font-size="12" font-weight="700">new KV block</text>
+              <text x="99" y="130" text-anchor="middle" fill="#1d6b6b" font-size="10.5">new max mⱼ</text>
+              <!-- decision -->
+              <path d="M174,116 L226,116" fill="none" stroke="#857a68" stroke-width="1.5" marker-end="url(#ac)"/>
+              <path d="M300,82 L300,52 360,52 360,52" fill="none" stroke="#857a68" stroke-width="1.5"/>
+              <g>
+                <path d="M300,80 L240,116 L300,152 L360,116 Z" fill="#fff5e9" stroke="#bd4f25" stroke-width="1.6"/>
+                <text x="300" y="111" text-anchor="middle" fill="#8f3713" font-size="11.5" font-weight="700">mⱼ − mⱼ₋₁</text>
+                <text x="300" y="126" text-anchor="middle" fill="#8f3713" font-size="11.5" font-weight="700">&gt; τ ?</text>
+              </g>
+              <!-- yes branch -->
+              <path d="M360,98 C400,86 410,64 446,64" fill="none" stroke="#bd4f25" stroke-width="1.6" marker-end="url(#ac)"/>
+              <text x="404" y="56" font-size="11" fill="#8f3713" font-weight="700">YES (rare)</text>
+              <rect x="448" y="40" width="346" height="48" rx="9" fill="#fbe8df" stroke="#bd4f25" stroke-width="1.5"/>
+              <text x="621" y="60" text-anchor="middle" fill="#8f3713" font-size="12" font-weight="700">RESCALE: O,ℓ ×= e^(mⱼ₋₁−mⱼ),  update m</text>
+              <text x="621" y="77" text-anchor="middle" fill="#a3563a" font-size="10.5">the expensive full-output multiply</text>
+              <!-- no branch -->
+              <path d="M360,134 C400,146 410,168 446,168" fill="none" stroke="#1d6b6b" stroke-width="1.6" marker-end="url(#ac)"/>
+              <text x="404" y="186" font-size="11" fill="#0f4a4a" font-weight="700">NO (usual)</text>
+              <rect x="448" y="144" width="346" height="48" rx="9" fill="#e7eef0" stroke="#1d6b6b" stroke-width="1.5"/>
+              <text x="621" y="164" text-anchor="middle" fill="#0f4a4a" font-size="12" font-weight="700">SKIP rescale · keep mⱼ₋₁ · just accumulate</text>
+              <text x="621" y="181" text-anchor="middle" fill="#1d6b6b" font-size="10.5">remember the slack; fix it once at the end</text>
+            </svg>
+          </div>
+          <figcaption><b>Skip the clean-up when you can.</b> Only rescale when the running maximum jumps by a lot (past a set limit). Almost every block takes the cheap “skip” path. One final tidy-up fixes everything exactly, so no accuracy is lost.</figcaption>
+        </figure>
+
+        <p>The limit (the paper calls it $\tau$, "tau") is set so the postponed adjustment can never grow large enough to break the numbers. In practice the vast majority of tiles take the cheap "skip" path. One last tidy-up at the end makes the result <em>exactly</em> correct — <strong>no accuracy is lost</strong>.</p>
+        <p>One small but neat detail. Workers move in lockstep groups; if some workers in a group want to rescale and others don't, the group is forced to do <em>both</em> paths one after the other — slow. (This stall is called "divergence.") So FlashAttention-4 simply rescales the <em>whole</em> group whenever <em>any</em> worker in it needs to, keeping everyone on the same path.</p>
+
+        <div class="box plain">
+          <p class="label"><span class="dot" style="background:var(--good)"></span>In plain words</p>
+          <p style="margin-bottom:0">Most of the time the clean-up isn't needed, so don't do it. Track the little bit you skipped and settle up once at the end. Same answer, far less work.</p>
+        </div>
+
+        <div class="box note">
+          <p class="label"><span class="dot" style="background:var(--ink-faint)"></span>Putting §6 together</p>
+          <p style="margin-bottom:0">Overlapping (6.1) turns the slow "sum" into a fast "max." Faking exp (6.2) shrinks the part that was tied for slowest. Skipping the clean-up (6.3) deletes a chunk of work outright. Together they push the forward pass to about <strong>71% of the chip's top possible speed</strong> (§10).</p>
+        </div>
+      </section>
+
+      <!-- ===================== 7 BACKWARD ===================== -->
+      <section id="bwd">
+        <div class="sec-head"><span class="sec-num">07</span><h2>The backward pass: when moving data is the wall</h2></div>
+        <p class="lead">Training a model means also running attention <em>in reverse</em> to learn from mistakes (the backward pass from §3). It's a tougher job than reading, and here the slow part isn't exp — it's moving data across the desk.</p>
+
+        <h3>Why backward is harder</h3>
+        <p>Three reasons the reverse pass strains the chip more:</p>
+        <ol>
+          <li><strong>Five matrix multiplies, not two.</strong> Reading needed two; training needs five. More math, and (because of the lopsided chip) much more data to feed it.</li>
+          <li><strong>It has to rebuild what it threw away.</strong> Remember, FlashAttention never stored the giant grids — that was the whole point. But the backward pass needs them. So it <em>recomputes</em> them from scratch from Q and K. (Trading extra math to avoid storing things is a good deal on this chip.)</li>
+          <li><strong>One result must be summed across many cores.</strong> The gradient for Q (called <span class="term">dQ</span>) gets a little contribution from <em>every</em> block of keys — and different blocks are handled by different cores. So all those partial pieces must be added together into one shared spot. That safe-but-slow "everyone adds into the same place" operation is called an <span class="term">atomic add</span>. It's slow, and worse, the pieces can arrive in any order — and adding tiny numbers in a different order gives slightly different results. So it also makes training <em>not exactly repeatable</em>.</li>
+        </ol>
+
+        <h3>The slow part is data movement</h3>
+        <p>If we list the times again (like §5) but for the backward pass, the picture flips: the data movement now needs <em>more</em> time than the math. Here it is in ticks:</p>
+        <div class="tbl-wrap">
+          <table>
+            <caption>Table 3 — the backward step, measured in clock-ticks. Moving data (the “shared memory” rows) is the slow part. The two-core mode on the right almost closes the gap with the math.</caption>
+            <thead>
+              <tr><th>Resource</th><th>1-CTA &nbsp;(M=128)</th><th>2-CTA &nbsp;(M=256)</th></tr>
+            </thead>
+            <tbody>
+              <tr><td>MMA compute</td><td class="num">2560</td><td class="num">2560</td></tr>
+              <tr><td>Shared memory — MMA operands</td><td class="num">2048</td><td class="num">1536</td></tr>
+              <tr><td>Shared memory — <span class="mono">dS</span> write</td><td class="num">256</td><td class="num">256</td></tr>
+              <tr><td>Shared memory — <span class="mono">dS</span> DSMEM exchange</td><td class="num">0</td><td class="num">384</td></tr>
+              <tr><td>Shared memory — <span class="mono">dQ</span> write + read</td><td class="num">1024</td><td class="num">512</td></tr>
+              <tr><td><strong>Total shared memory</strong></td><td class="num"><span class="hl">3328</span></td><td class="num"><span class="winner">2688</span></td></tr>
+              <tr><td>Exponential unit</td><td class="num">1024</td><td class="num">1024</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <p>In the left column, the math needs about 2560 ticks, but moving data needs about 3328 — roughly <strong>30% more</strong>. So the backward pass is stuck waiting on data, not math. That's why every trick below is about <em>moving less data</em>. (The right column is the two-core fix; we'll get there.)</p>
+
+        <h3>7.1 &nbsp; Keep two multiplies running at once</h3>
+        <p>Same overlap goal as the forward pass: to hide the in-between softmax-style work, you want at least two matrix multiplies running at the same time. But there's a snag — the five backward multiplies form a <em>chain</em>: each one needs the result of the one before it, so they naturally want to go one at a time.</p>
+        <p>The escape: thanks to the new TMEM parking spot, the chip can keep work from <em>two different rounds</em> of the loop going at once. So while this round computes its middle (chain-bound) step, the chip runs the <strong>leftover multiplies from the previous round</strong> to keep the engine busy. Two multiplies in flight, always.</p>
+        <figure>
+          <div class="fig-frame">
+            <svg viewBox="0 0 820 300" xmlns="http://www.w3.org/2000/svg" font-family="JetBrains Mono, monospace">
+              <text x="20" y="26" fill="#211c16" font-size="13" font-weight="700">The backward computation graph — 5 matmuls (rust) + 1 elementwise step (violet)</text>
+
+              <!-- recompute S -->
+              <g>
+                <rect x="20" y="56" width="120" height="46" rx="9" fill="#fbe8df" stroke="#bd4f25" stroke-width="1.6"/>
+                <text x="80" y="78" text-anchor="middle" fill="#8f3713" font-size="12.5" font-weight="700">① recompute</text>
+                <text x="80" y="94" text-anchor="middle" fill="#8f3713" font-size="12.5" font-weight="700">S = αQKᵀ</text>
+              </g>
+              <!-- dP -->
+              <g>
+                <rect x="20" y="128" width="120" height="46" rx="9" fill="#fbe8df" stroke="#bd4f25" stroke-width="1.6"/>
+                <text x="80" y="150" text-anchor="middle" fill="#8f3713" font-size="12.5" font-weight="700">② dP = dO·Vᵀ</text>
+                <text x="80" y="166" text-anchor="middle" fill="#a3563a" font-size="10.5">(needs V, dO)</text>
+              </g>
+              <!-- dS elementwise -->
+              <g>
+                <rect x="200" y="92" width="150" height="46" rx="9" fill="#efe7f3" stroke="#6a4a86" stroke-width="1.6"/>
+                <text x="275" y="113" text-anchor="middle" fill="#553a6e" font-size="12.5" font-weight="700">③ dS = dsoftmax(dP)</text>
+                <text x="275" y="129" text-anchor="middle" fill="#6a4a86" font-size="10.5">elementwise · the latency to hide</text>
+              </g>
+              <!-- dV -->
+              <g>
+                <rect x="200" y="34" width="150" height="40" rx="9" fill="#fdf1ea" stroke="#d98a63" stroke-width="1.4"/>
+                <text x="275" y="58" text-anchor="middle" fill="#8f3713" font-size="12" font-weight="700">dV = Pᵀ·dO &nbsp;(accumulate)</text>
+              </g>
+              <!-- dQ -->
+              <g>
+                <rect x="410" y="70" width="150" height="44" rx="9" fill="#fbe8df" stroke="#bd4f25" stroke-width="1.6"/>
+                <text x="485" y="91" text-anchor="middle" fill="#8f3713" font-size="12.5" font-weight="700">④ dQ = α·dS·K</text>
+                <text x="485" y="107" text-anchor="middle" fill="#a3563a" font-size="10.5">→ atomic-add to global</text>
+              </g>
+              <!-- dK -->
+              <g>
+                <rect x="410" y="128" width="150" height="44" rx="9" fill="#fdf1ea" stroke="#d98a63" stroke-width="1.4"/>
+                <text x="485" y="149" text-anchor="middle" fill="#8f3713" font-size="12" font-weight="700">⑤ dK = α·dSᵀ·Q</text>
+                <text x="485" y="165" text-anchor="middle" fill="#a3563a" font-size="10.5">(accumulate)</text>
+              </g>
+
+              <!-- arrows -->
+              <defs><marker id="bk" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#857a68"/></marker></defs>
+              <path d="M140,96 C168,100 172,108 198,112" fill="none" stroke="#857a68" stroke-width="1.4" marker-end="url(#bk)"/>
+              <path d="M140,150 C168,140 172,128 198,120" fill="none" stroke="#857a68" stroke-width="1.4" marker-end="url(#bk)"/>
+              <path d="M140,70 C168,60 172,56 198,54" fill="none" stroke="#857a68" stroke-width="1.2" marker-end="url(#bk)" opacity=".5"/>
+              <path d="M350,108 C378,100 382,94 408,92" fill="none" stroke="#857a68" stroke-width="1.4" marker-end="url(#bk)"/>
+              <path d="M350,122 C378,134 382,144 408,148" fill="none" stroke="#857a68" stroke-width="1.4" marker-end="url(#bk)"/>
+
+              <!-- the overlap bracket -->
+              <rect x="200" y="200" width="360" height="74" rx="11" fill="#f4f8f4" stroke="#2f7d4f" stroke-width="1.3" stroke-dasharray="5 4"/>
+              <text x="380" y="222" text-anchor="middle" fill="#2f7d4f" font-size="12" font-weight="700">THE OVERLAP</text>
+              <text x="380" y="241" text-anchor="middle" fill="#3c5c47" font-size="11">while this iteration computes the violet dS (③),</text>
+              <text x="380" y="258" text-anchor="middle" fill="#3c5c47" font-size="11">the tensor cores run the PREVIOUS iteration's dQ + dK (④⑤).</text>
+              <text x="380" y="271" text-anchor="middle" fill="#6a8a73" font-size="10">two matmuls always in flight → cores never idle</text>
+
+              <!-- TMEM note -->
+              <rect x="600" y="40" width="200" height="150" rx="11" fill="#e7eef0" stroke="#1d6b6b" stroke-width="1.3"/>
+              <text x="700" y="62" text-anchor="middle" fill="#0f4a4a" font-size="12" font-weight="700">TMEM is the constraint</text>
+              <text x="612" y="86" fill="#185c5c" font-size="10.5">Only 4 of 5 accumulator</text>
+              <text x="612" y="101" fill="#185c5c" font-size="10.5">tiles (128×128) fit at once.</text>
+              <text x="612" y="122" fill="#185c5c" font-size="10.5">dV and dK must each</text>
+              <text x="612" y="137" fill="#185c5c" font-size="10.5">accumulate → can't share.</text>
+              <text x="612" y="160" fill="#0f4a4a" font-size="10.5" font-weight="700">So: S &amp; P share one block;</text>
+              <text x="612" y="175" fill="#0f4a4a" font-size="10.5" font-weight="700">dP, dS, dQ share the other.</text>
+            </svg>
+          </div>
+          <figcaption><b>The backward step.</b> It has five matrix multiplies, and each needs the one before it. To keep the engine busy, the paper overlaps this round's middle step with the leftover multiplies from the <i>previous</i> round — so two multiplies are always running. The new parking spot (TMEM) is tight: only four answer-tiles fit, so some must share space.</figcaption>
+        </figure>
+
+        <div class="box plain">
+          <p class="label"><span class="dot" style="background:var(--good)"></span>In plain words</p>
+          <p style="margin-bottom:0">The five steps depend on each other, so they'd run one at a time. Fix: overlap this round's middle step with last round's leftover steps, so the engine always has two multiplies going.</p>
+        </div>
+
+        <h3>7.2 &nbsp; The two-core trick: each core carries half the load</h3>
+        <p>This is the big one. The slow part is moving data across the desk, and most of that is the multiply's inputs. So use the <strong>two-core mode</strong> from §2: pair up two neighboring cores to do one big multiply together, with <em>each core holding only half</em> of the input. Half the data on each desk means half the desk traffic. Look at the right column of Table 3 again — the data time drops from 3328 to 2688, almost matching the math. The wall is basically gone.</p>
+
+        <div class="box note">
+          <p class="label"><span class="dot" style="background:var(--ink-faint)"></span>The catch (and the fix)</p>
+          <p style="margin-bottom:0">Splitting one job across two cores works fine for four of the five multiplies. But <strong>dQ</strong> is special: its sum runs <em>across</em> the very thing the split divides up. So after the split, each core is left holding only <em>half</em> of the sum it needs. The fix is a quick swap.</p>
+        </div>
+
+        <p>The swap uses a feature called <span class="term">DSMEM</span> — a shortcut that lets two neighbor cores peek directly at each other's desk. The two cores trade halves of the data, re-sorting it so that each core ends up holding <em>whole rows</em> with the <em>full</em> sum. Now each can finish its own clean slice of dQ:</p>
+        <figure>
+          <div class="fig-frame">
+            <svg viewBox="0 0 820 280" xmlns="http://www.w3.org/2000/svg" font-family="JetBrains Mono, monospace">
+              <text x="20" y="24" fill="#211c16" font-size="13" font-weight="700">Figure 3 redrawn — the 2-CTA dQ exchange</text>
+
+              <!-- STAGE A: split by reduction (the problem) -->
+              <text x="120" y="56" text-anchor="middle" fill="#8f3713" font-size="11.5" font-weight="700">BEFORE swap</text>
+              <text x="120" y="71" text-anchor="middle" fill="#a3563a" font-size="10">dS split along N (the reduction axis)</text>
+              <!-- core 0 holds left half cols -->
+              <rect x="42" y="84" width="70" height="120" fill="#f1ece0" stroke="#cabfa6"/>
+              <rect x="42" y="84" width="35" height="120" fill="#e7eef0" stroke="#1d6b6b" stroke-width="1.5"/>
+              <text x="59" y="148" text-anchor="middle" fill="#0f4a4a" font-size="10" font-weight="700" transform="rotate(-90 59 148)">CTA 0 half</text>
+              <rect x="112" y="84" width="35" height="120" fill="#fbe8df" stroke="#bd4f25" stroke-width="1.5"/>
+              <text x="129" y="148" text-anchor="middle" fill="#8f3713" font-size="10" font-weight="700" transform="rotate(-90 129 148)">CTA 1 half</text>
+              <text x="94" y="220" text-anchor="middle" fill="#857a68" font-size="10">M rows × N (each owns ½ the columns)</text>
+              <text x="94" y="234" text-anchor="middle" fill="#bd4f25" font-size="10" font-weight="700">✗ neither core has a full row-sum</text>
+
+              <!-- arrow with DSMEM -->
+              <defs><marker id="dq" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#1d6b6b"/></marker></defs>
+              <path d="M250,144 L330,144" fill="none" stroke="#1d6b6b" stroke-width="2" marker-end="url(#dq)"/>
+              <rect x="252" y="108" width="76" height="40" rx="8" fill="#e7eef0" stroke="#1d6b6b" stroke-width="1.4"/>
+              <text x="290" y="125" text-anchor="middle" fill="#0f4a4a" font-size="11" font-weight="700">DSMEM</text>
+              <text x="290" y="139" text-anchor="middle" fill="#185c5c" font-size="9.5">swap halves</text>
+
+              <!-- STAGE B: split by rows (the fix) -->
+              <text x="430" y="56" text-anchor="middle" fill="#2f7d4f" font-size="11.5" font-weight="700">AFTER swap</text>
+              <text x="430" y="71" text-anchor="middle" fill="#3c5c47" font-size="10">dS re-packed along rows (M); full 2N kept</text>
+              <rect x="372" y="84" width="116" height="60" fill="#e7eef0" stroke="#1d6b6b" stroke-width="1.6"/>
+              <text x="430" y="118" text-anchor="middle" fill="#0f4a4a" font-size="10.5" font-weight="700">CTA 0 — top M/2 rows</text>
+              <rect x="372" y="144" width="116" height="60" fill="#fbe8df" stroke="#bd4f25" stroke-width="1.6"/>
+              <text x="430" y="178" text-anchor="middle" fill="#8f3713" font-size="10.5" font-weight="700">CTA 1 — bottom M/2 rows</text>
+              <text x="430" y="220" text-anchor="middle" fill="#857a68" font-size="10">each row now spans the full 2N reduction</text>
+              <text x="430" y="234" text-anchor="middle" fill="#2f7d4f" font-size="10" font-weight="700">✓ each core owns complete rows</text>
+
+              <!-- arrow to result -->
+              <path d="M500,144 L560,144" fill="none" stroke="#857a68" stroke-width="1.6" marker-end="url(#bk)"/>
+
+              <!-- STAGE C: result -->
+              <text x="690" y="56" text-anchor="middle" fill="#8f3713" font-size="11.5" font-weight="700">CTA-pair UMMA</text>
+              <text x="690" y="71" text-anchor="middle" fill="#a3563a" font-size="10">(M/2 × 2N)(2N × d) → dQ</text>
+              <rect x="600" y="84" width="180" height="60" rx="8" fill="#fbe8df" stroke="#bd4f25" stroke-width="1.6"/>
+              <text x="690" y="110" text-anchor="middle" fill="#8f3713" font-size="11" font-weight="700">dQ : CTA 0 (M/2 × d)</text>
+              <text x="690" y="128" text-anchor="middle" fill="#a3563a" font-size="9.5">doubled reduction 2N = 256</text>
+              <rect x="600" y="144" width="180" height="60" rx="8" fill="#fdf1ea" stroke="#d98a63" stroke-width="1.4"/>
+              <text x="690" y="170" text-anchor="middle" fill="#8f3713" font-size="11" font-weight="700">dQ : CTA 1 (M/2 × d)</text>
+              <text x="690" y="188" text-anchor="middle" fill="#a3563a" font-size="9.5">each core writes only ½ of dQ</text>
+
+              <text x="20" y="266" fill="#857a68" font-size="10.5">Result: half the operand-B traffic AND half the global atomic-adds, because each core now writes only its own M/2 rows of dQ.</text>
+            </svg>
+          </div>
+          <figcaption><b>The two-core teamwork trick for $dQ$.</b> When two cores split a job, each ends up with only <i>half</i> of a sum it needs. The fix: the two cores quickly swap halves of the data (using a shared-memory shortcut), so each one ends up holding whole rows with the full sum. Then each computes its own clean slice of the answer.</figcaption>
+        </figure>
+
+        <h3>7.3 &nbsp; A free bonus: half the slow adds</h3>
+        <p>That same split pays off twice. Because each core now produces only <em>half</em> of dQ (its own rows), it does only <em>half</em> as many of those slow "everyone adds into the same place" operations (the atomic adds). Fewer slow adds means a faster kernel — and, as a bonus, less of the not-exactly-repeatable problem.</p>
+
+        <h3>7.4 &nbsp; A repeatable mode for careful training</h3>
+        <p>Some training (especially reinforcement learning) and a lot of debugging need results that come out <em>exactly</em> the same every run. But those atomic adds break that, because the pieces can be added in any order, and tiny rounding makes order matter. So FlashAttention-4 offers an optional "deterministic" mode that you can switch on.</p>
+        <p>The basic fix is to <strong>force a fixed adding order</strong>: each core must wait its turn (using a simple lock) before adding its piece, always in the same set order. Same order every run means same answer every run. The cost is the waiting.</p>
+        <p>Done carelessly, that waiting can be terrible — because of the lopsided causal workload (§8), some cores would sit stuck for ages. So the authors use a smart ordering called <strong>SPT</strong> (shortest-processing-time-first), arranged so that <em>no core ever has to wait on its first write</em>. The payoff: the repeatable mode still runs at up to <strong>75% of the normal speed</strong> — a small price for results you can trust and reproduce.</p>
+
+        <div class="box plain">
+          <p class="label"><span class="dot" style="background:var(--good)"></span>In plain words — all of §7</p>
+          <p style="margin-bottom:0">The backward pass is slow because of data movement. Pair up two cores so each carries half the data (with a quick swap to fix one tricky sum). That halves the data traffic <em>and</em> the slow adds. And if you need exactly-repeatable results, there's a careful "fixed order" mode that costs only about 25% of speed.</p>
+        </div>
+      </section>
+
+      <!-- ===================== 8 SCHEDULING ===================== -->
+      <section id="sched">
+        <div class="sec-head"><span class="sec-num">08</span><h2>Sharing the work fairly</h2></div>
+        <p class="lead">The chip has ~148 cores all working at once. But the job isn't done until the <em>last</em> core finishes. So if you dump a huge pile of work on one core and a tiny pile on another, most of the chip sits idle waiting. Two common situations cause exactly this, and the paper fixes both.</p>
+
+        <h3>Why the piles come out uneven</h3>
+        <p>In a chatbot, each word is only allowed to look at the words <em>before</em> it (you can't peek at the future). This is called <span class="term">causal masking</span>. It means the first word has almost nothing to do (no earlier words to look at), while the last word has to look at everything. So the work grows steadily from the first word to the last — a lopsided, triangular pile:</p>
+        <figure>
+          <div class="fig-frame">
+            <svg viewBox="0 0 820 250" xmlns="http://www.w3.org/2000/svg" font-family="JetBrains Mono, monospace">
+              <text x="20" y="24" fill="#211c16" font-size="13" font-weight="700">Causal masking makes the per-tile work triangular</text>
+
+              <!-- the triangular matrix -->
+              <text x="135" y="52" text-anchor="middle" fill="#4f463a" font-size="11">attention matrix (causal)</text>
+              <g transform="translate(40,62)">
+                <!-- grid 6x6, lower triangle filled -->
+                <!-- row i has i+1 filled cells -->
+                <g stroke="#cabfa6" stroke-width="1">
+                  <!-- draw filled cells -->
+                  <!-- row0 -->
+                  <rect x="0" y="0" width="32" height="26" fill="#fbe8df"/>
+                  <!-- row1 -->
+                  <rect x="0" y="26" width="32" height="26" fill="#fbe8df"/><rect x="32" y="26" width="32" height="26" fill="#fbe8df"/>
+                  <!-- row2 -->
+                  <rect x="0" y="52" width="32" height="26" fill="#fbe8df"/><rect x="32" y="52" width="32" height="26" fill="#fbe8df"/><rect x="64" y="52" width="32" height="26" fill="#fbe8df"/>
+                  <!-- row3 -->
+                  <rect x="0" y="78" width="32" height="26" fill="#f3a983"/><rect x="32" y="78" width="32" height="26" fill="#f3a983"/><rect x="64" y="78" width="32" height="26" fill="#f3a983"/><rect x="96" y="78" width="32" height="26" fill="#f3a983"/>
+                  <!-- row4 -->
+                  <rect x="0" y="104" width="32" height="26" fill="#e07a4a"/><rect x="32" y="104" width="32" height="26" fill="#e07a4a"/><rect x="64" y="104" width="32" height="26" fill="#e07a4a"/><rect x="96" y="104" width="32" height="26" fill="#e07a4a"/><rect x="128" y="104" width="32" height="26" fill="#e07a4a"/>
+                  <!-- row5 -->
+                  <rect x="0" y="130" width="32" height="26" fill="#bd4f25"/><rect x="32" y="130" width="32" height="26" fill="#bd4f25"/><rect x="64" y="130" width="32" height="26" fill="#bd4f25"/><rect x="96" y="130" width="32" height="26" fill="#bd4f25"/><rect x="128" y="130" width="32" height="26" fill="#bd4f25"/><rect x="160" y="130" width="32" height="26" fill="#bd4f25"/>
+                  <!-- empty upper triangle outlines -->
+                  <rect x="32" y="0" width="160" height="26" fill="#f6f1e8"/><rect x="64" y="26" width="128" height="26" fill="#f6f1e8"/><rect x="96" y="52" width="96" height="26" fill="#f6f1e8"/><rect x="128" y="78" width="64" height="26" fill="#f6f1e8"/><rect x="160" y="104" width="32" height="26" fill="#f6f1e8"/>
+                </g>
+                <text x="-8" y="16" text-anchor="end" fill="#857a68" font-size="9">Q0</text>
+                <text x="-8" y="146" text-anchor="end" fill="#857a68" font-size="9">Q5</text>
+                <text x="96" y="178" text-anchor="middle" fill="#857a68" font-size="9.5">keys →</text>
+              </g>
+
+              <!-- workload bars -->
+              <text x="500" y="52" text-anchor="middle" fill="#4f463a" font-size="11">work per query block (1 cell = 1 unit)</text>
+              <g transform="translate(330,62)">
+                <!-- bars Q0..Q5 -->
+                <g font-size="9.5" fill="#857a68">
+                  <rect x="0" y="0" width="32" height="18" fill="#fbe8df" stroke="#cabfa6"/><text x="300" y="14">Q0: 1 — nearly idle</text>
+                  <rect x="0" y="26" width="64" height="18" fill="#fbe8df" stroke="#cabfa6"/><text x="300" y="40">Q1: 2</text>
+                  <rect x="0" y="52" width="96" height="18" fill="#f3a983" stroke="#cabfa6"/><text x="300" y="66">Q2: 3</text>
+                  <rect x="0" y="78" width="128" height="18" fill="#f3a983" stroke="#cabfa6"/><text x="300" y="92">Q3: 4</text>
+                  <rect x="0" y="104" width="160" height="18" fill="#e07a4a" stroke="#cabfa6"/><text x="300" y="118">Q4: 5</text>
+                  <rect x="0" y="130" width="192" height="18" fill="#bd4f25" stroke="#cabfa6"/><text x="300" y="144">Q5: 6 — does everything</text>
+                </g>
+              </g>
+              <text x="20" y="240" fill="#857a68" font-size="10.5">The last block does 6× the work of the first. Naive order (Q0→Q5) processes short-then-long — exactly what LPT says to avoid. FA-4 reverses the mblock order so the heavy tiles launch first.</text>
+            </svg>
+          </div>
+          <figcaption><b>Lopsided work from masking.</b> In a chatbot, each word only looks at earlier words, so later words have much more to do. Start with the light work first and some cores finish early and sit idle. The fix is to start the heavy pieces first.</figcaption>
+        </figure>
+
+        <p>If you hand out this work in the natural order — lightest first — your cores finish at wildly different times, and the busy ones become the bottleneck. The second messy situation is <span class="term">varlen</span> (variable length): real batches mix short and long texts together, so again some piles are much bigger than others.</p>
+
+        <h3>The fix: hand out the big jobs first</h3>
+        <div class="box def">
+          <p class="label"><span class="dot" style="background:var(--teal)"></span>An old, simple rule</p>
+          <p>The total time is set by whoever finishes last. There's a classic result from 1969 with a dead-simple recipe to even things out: <strong>give out the biggest jobs first</strong>, and let the small leftover jobs fill the gaps at the end. It's called <strong>LPT</strong> — "longest first." It isn't perfect, but it's close, and it's easy.</p>
+          <p style="margin-bottom:0">FlashAttention-4 treats each chunk of attention work as a job and the cores as workers, then hands out the heavy chunks first.</p>
+        </div>
+
+        <p>There's one wrinkle worth knowing. You can't just reorder everything blindly, because nearby chunks of work often reuse the same data sitting in a shared cache. Jump around too much and that data falls out of the cache and has to be re-fetched (this is called "thrashing"). So FlashAttention-4 reorders carefully: it keeps related work together in cache-sized batches, but <em>within</em> each batch it starts with the heavy pieces first. On a real chip this gave about <strong>4–8% more speed for one common setup and 7–14% for another</strong> — and it's the main reason the masked cases in §10 do so well.</p>
+
+        <h3>For variable-length batches: a tiny sorting step</h3>
+        <p>For the mixed-length case, the fix is a small <strong>pre-sorting step</strong> that runs before the main work. It looks at all the texts, sorts them so the biggest jobs go first, and writes down the new order. The main kernel then just follows that order. Best of all, this little plan can be worked out once and reused, so it adds essentially <strong>no extra time</strong>.</p>
+
+        <div class="box plain">
+          <p class="label"><span class="dot" style="background:var(--good)"></span>In plain words</p>
+          <p style="margin-bottom:0">The chip is only as fast as its slowest core. Masking and mixed lengths make some cores' piles much bigger. The fix is the oldest trick in scheduling: do the big jobs first (while keeping reused data close), so everyone finishes around the same time.</p>
+        </div>
+      </section>
+
+      <!-- ===================== 9 PYTHON ===================== -->
+      <section id="dsl">
+        <div class="sec-head"><span class="sec-num">09</span><h2>The whole thing is written in Python</h2></div>
+        <p class="lead">Every trick we've covered is fiddly, ultra-low-level chip work. Normally you'd write that in C++ — powerful, but painful, slow to build, and doable only by a few experts. The surprise: FlashAttention-4 is written entirely in <strong>Python</strong>, with no C++ at all.</p>
+
+        <h3>Wait — isn't Python slow?</h3>
+        <p>Python is famous for being easy to write but slow to run. So how can the world's fastest attention be written in it? Because this isn't ordinary Python calling a fast library. It's a special flavor of Python (called <span class="term">CuTe-DSL</span>) that gets translated <em>all the way down</em> to the chip's real instructions. It keeps the full, fine-grained control of C++ — you can still say exactly where each piece of data goes — but you write it in readable Python. You get the easy language <em>and</em> the full speed.</p>
+        <p>The translation happens in two hops. Your Python becomes a kind of in-between code called <strong>PTX</strong>, and then a tool turns that into <strong>SASS</strong>, the actual instructions the chip runs:</p>
+        <figure>
+          <div class="fig-frame">
+            <svg viewBox="0 0 820 150" xmlns="http://www.w3.org/2000/svg" font-family="JetBrains Mono, monospace">
+              <text x="20" y="26" fill="#211c16" font-size="13" font-weight="700">The compilation path: Python all the way down to GPU assembly</text>
+              <defs><marker id="cc" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#bd4f25"/></marker></defs>
+
+              <rect x="30" y="58" width="150" height="56" rx="11" fill="#e7eef0" stroke="#1d6b6b" stroke-width="1.6"/>
+              <text x="105" y="82" text-anchor="middle" fill="#0f4a4a" font-size="13" font-weight="700">Python</text>
+              <text x="105" y="100" text-anchor="middle" fill="#185c5c" font-size="10">CuTe-DSL source</text>
+
+              <path d="M182,86 L246,86" fill="none" stroke="#bd4f25" stroke-width="1.8" marker-end="url(#cc)"/>
+              <text x="214" y="78" text-anchor="middle" fill="#8f3713" font-size="9.5">DSL compiler</text>
+
+              <rect x="248" y="58" width="150" height="56" rx="11" fill="#fff5e9" stroke="#c1922a" stroke-width="1.6"/>
+              <text x="323" y="82" text-anchor="middle" fill="#9a740f" font-size="13" font-weight="700">PTX</text>
+              <text x="323" y="100" text-anchor="middle" fill="#9a740f" font-size="10">virtual ISA</text>
+
+              <path d="M400,86 L464,86" fill="none" stroke="#bd4f25" stroke-width="1.8" marker-end="url(#cc)"/>
+              <text x="432" y="78" text-anchor="middle" fill="#8f3713" font-size="9.5">ptxas</text>
+
+              <rect x="466" y="58" width="150" height="56" rx="11" fill="#fbe8df" stroke="#bd4f25" stroke-width="1.6"/>
+              <text x="541" y="82" text-anchor="middle" fill="#8f3713" font-size="13" font-weight="700">SASS</text>
+              <text x="541" y="100" text-anchor="middle" fill="#a3563a" font-size="10">real GPU assembly</text>
+
+              <rect x="650" y="50" width="150" height="72" rx="11" fill="#f4f8f4" stroke="#2f7d4f" stroke-width="1.4" stroke-dasharray="5 4"/>
+              <text x="725" y="74" text-anchor="middle" fill="#2f7d4f" font-size="12" font-weight="700">JIT compiled</text>
+              <text x="725" y="92" text-anchor="middle" fill="#3c5c47" font-size="10">just-in-time, on demand</text>
+              <text x="725" y="108" text-anchor="middle" fill="#3c5c47" font-size="10">→ 20–30× faster builds</text>
+            </svg>
+          </div>
+          <figcaption><b>From Python down to chip instructions.</b> The Python code becomes PTX (a kind of in-between code), and then a tool called <span class="mono">ptxas</span> turns that into SASS (the real instructions the chip runs). Building this on demand replaces the old, slow way of pre-building hundreds of versions in C++.</figcaption>
+        </figure>
+
+        <h3>It also builds dramatically faster</h3>
+        <p>"Building" (or "compiling") means turning the human-written code into chip instructions. The old C++ way had a real headache: it pre-built <em>hundreds</em> of slightly different versions ahead of time, one for each possible setting — and that took ages. The new Python way builds just the version you need, right when you need it (this is called "just-in-time"). The difference is huge:</p>
+        <div class="tbl-wrap">
+          <table>
+            <caption>Table 4 — how long it takes to build one piece of the program. The old way used C++; the new way uses Python and builds far faster.</caption>
+            <thead><tr><th>Method</th><th>Forward pass</th><th>Backward pass</th></tr></thead>
+            <tbody>
+              <tr><td>FlashAttention-3 (C++ templates)</td><td class="num">55 s</td><td class="num">45 s</td></tr>
+              <tr><td>FlashAttention-4 (CuTe-DSL)</td><td class="num">2.5 s</td><td class="num">1.4 s</td></tr>
+              <tr><td><strong>Speedup</strong></td><td class="num"><span class="winner">22×</span></td><td class="num"><span class="winner">32×</span></td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <p>This isn't just nicer for the authors. It changes <em>who can help</em>. The paper notes that people with only a <em>few months</em> of chip experience have already built useful add-ons on top of FlashAttention-4 without touching the hard core. That's because the design is built from <strong>reusable, snap-together pieces</strong> — the masking, the scheduling, the mixed-length handling are each separate building blocks. Improve one block (say, the work-sharing from §8) and every version that uses it gets faster for free.</p>
+
+        <div class="box analogy">
+          <p class="label"><span class="dot" style="background:var(--gold)"></span>Hand-tools vs a programmable machine</p>
+          <p style="margin-bottom:0">The old C++ way was like hand-machining a custom part for every order — slow, and only a master could do it. The Python way is a modern programmable machine: the <em>same</em> precise part comes out, but you can change the design in seconds and a beginner can run it.</p>
+        </div>
+
+        <div class="box plain">
+          <p class="label"><span class="dot" style="background:var(--good)"></span>In plain words</p>
+          <p style="margin-bottom:0">It's written in a special Python that's just as fast as C++ because it compiles down to the same chip instructions — but it builds 20–30× faster and is far easier to read, change, and build on.</p>
+        </div>
+      </section>
+
+      <!-- ===================== 10 RESULTS ===================== -->
+      <section id="results">
+        <div class="sec-head"><span class="sec-num">10</span><h2>Does it work? The results</h2></div>
+        <p class="lead">All this effort pays off. On the real new chip, across realistic text lengths, FlashAttention-4 is the fastest attention tested — and it gets close to the chip's top possible speed.</p>
+
+        <h3>How they measured it</h3>
+        <p>They ran it on a Blackwell chip, with text lengths from about 1,000 up to 32,000 words, and compared it against the best tools available: <strong>cuDNN</strong> (NVIDIA's own official math library) and <strong>Triton</strong> (a popular open tool for writing GPU code). Speed is measured in <span class="term">TFLOPs/s</span> — trillions of math operations per second. Bigger is faster; that's all you need to know.</p>
+
+        <h3>Reading (forward) results</h3>
+        <p>FlashAttention-4 runs about <strong>1.1 to 1.3 times faster than NVIDIA's own cuDNN</strong>, and about <strong>2.1 to 2.7 times faster than Triton</strong>. At its best it hits <strong>1613 TFLOPs/s — roughly 71% of the chip's theoretical maximum</strong>, which is very high for real-world code. And the longer the text, the bigger its lead:</p>
+        <figure>
+          <div class="fig-frame">
+            <svg viewBox="0 0 820 340" xmlns="http://www.w3.org/2000/svg" font-family="JetBrains Mono, monospace">
+              <text x="20" y="22" fill="#211c16" font-size="13" font-weight="700">Forward TFLOPs/s — causal, head dim (192,128), the DeepSeek-V3 config (Fig. 5 data)</text>
+
+              <!-- gridlines + y labels -->
+              <g stroke="#e0d8c6" stroke-width="1">
+                <line x1="70" y1="290" x2="800" y2="290"/>
+                <line x1="70" y1="221" x2="800" y2="221" stroke-dasharray="3 4"/>
+                <line x1="70" y1="151" x2="800" y2="151" stroke-dasharray="3 4"/>
+                <line x1="70" y1="82"  x2="800" y2="82"  stroke-dasharray="3 4"/>
+              </g>
+              <g font-size="10" fill="#857a68" text-anchor="end">
+                <text x="62" y="294">0</text>
+                <text x="62" y="225">500</text>
+                <text x="62" y="155">1000</text>
+                <text x="62" y="86">1500</text>
+              </g>
+              <text x="22" y="165" font-size="10.5" fill="#4f463a" transform="rotate(-90 22 165)" text-anchor="middle">TFLOPs/s</text>
+
+              <!-- bars: g0=80 g1=198 g2=316 g3=434 g4=552 g5=670; bar w=26, offsets 8/38/68 -->
+              <!-- group 1K -->
+              <g><rect x="88"  y="183" width="26" height="107" fill="#cdbf9f"/><rect x="118" y="171" width="26" height="119" fill="#1d6b6b"/><rect x="148" y="177" width="26" height="113" fill="#bd4f25"/>
+                 <text x="131" y="304" text-anchor="middle" font-size="10.5" fill="#4f463a">1K</text></g>
+              <!-- 2K -->
+              <g><rect x="206" y="151" width="26" height="139" fill="#cdbf9f"/><rect x="236" y="133" width="26" height="157" fill="#1d6b6b"/><rect x="266" y="134" width="26" height="156" fill="#bd4f25"/>
+                 <text x="249" y="304" text-anchor="middle" font-size="10.5" fill="#4f463a">2K</text></g>
+              <!-- 4K -->
+              <g><rect x="324" y="128" width="26" height="162" fill="#cdbf9f"/><rect x="354" y="108" width="26" height="182" fill="#1d6b6b"/><rect x="384" y="102" width="26" height="188" fill="#bd4f25"/>
+                 <text x="367" y="304" text-anchor="middle" font-size="10.5" fill="#4f463a">4K</text></g>
+              <!-- 8K -->
+              <g><rect x="442" y="113" width="26" height="177" fill="#cdbf9f"/><rect x="472" y="94"  width="26" height="196" fill="#1d6b6b"/><rect x="502" y="81"  width="26" height="209" fill="#bd4f25"/>
+                 <text x="485" y="304" text-anchor="middle" font-size="10.5" fill="#4f463a">8K</text></g>
+              <!-- 16K -->
+              <g><rect x="560" y="99"  width="26" height="191" fill="#cdbf9f"/><rect x="590" y="80"  width="26" height="210" fill="#1d6b6b"/><rect x="620" y="68"  width="26" height="222" fill="#bd4f25"/>
+                 <text x="603" y="304" text-anchor="middle" font-size="10.5" fill="#4f463a">16K</text></g>
+              <!-- 32K -->
+              <g><rect x="678" y="98"  width="26" height="192" fill="#cdbf9f"/><rect x="708" y="73"  width="26" height="217" fill="#1d6b6b"/><rect x="738" y="60"  width="26" height="230" fill="#bd4f25"/>
+                 <text x="721" y="304" text-anchor="middle" font-size="10.5" fill="#4f463a">32K</text></g>
+
+              <!-- value labels on FA4 (rust) bars -->
+              <g font-size="9" fill="#8f3713" text-anchor="middle" font-weight="700">
+                <text x="161" y="172">812</text>
+                <text x="279" y="129">1121</text>
+                <text x="397" y="97">1357</text>
+                <text x="515" y="76">1506</text>
+                <text x="633" y="63">1600</text>
+                <text x="751" y="55">1654</text>
+              </g>
+
+              <text x="410" y="326" text-anchor="middle" font-size="10.5" fill="#4f463a">sequence length</text>
+
+              <!-- legend -->
+              <g font-size="10.5" fill="#4f463a">
+                <rect x="540" y="20" width="13" height="13" rx="3" fill="#cdbf9f"/><text x="558" y="31">cuDNN 9.13.0</text>
+                <rect x="540" y="38" width="13" height="13" rx="3" fill="#1d6b6b"/><text x="558" y="49">cuDNN 9.19.1.2</text>
+                <rect x="678" y="20" width="13" height="13" rx="3" fill="#bd4f25"/><text x="696" y="31" font-weight="700">FlashAttention-4</text>
+              </g>
+            </svg>
+          </div>
+          <figcaption><b>Speed climbs as the text gets longer.</b> On one common model setup, FlashAttention-4 (orange) is fastest at every length, and its lead grows for very long texts — the case that matters most today. (Numbers taken straight from the paper's Figure 5.)</figcaption>
+        </figure>
+
+        <h3>Training (backward) results</h3>
+        <p>The backward pass shows steady speed-ups too, confirming that the two-core trick from §7 does its job. And the special exactly-repeatable mode runs at up to <strong>75% of the normal speed</strong> — a small, fair price for results you can reproduce.</p>
+
+        <div class="box note">
+          <p class="label"><span class="dot" style="background:var(--ink-faint)"></span>An honest note from the authors</p>
+          <p style="margin-bottom:0">The authors worked with NVIDIA's cuDNN team, and since FlashAttention-4 first came out, cuDNN has folded many of these same tricks into its own newer versions — so the latest cuDNN now reaches similar speed. That's actually the goal: good ideas spread and help everyone, not just users of this one piece of software.</p>
+        </div>
+
+        <div class="box plain">
+          <p class="label"><span class="dot" style="background:var(--good)"></span>In plain words</p>
+          <p style="margin-bottom:0">It's the fastest option tested — faster than NVIDIA's own tool and much faster than the popular open one — and it reaches about 71% of what the chip can physically do. The lead grows for long texts, which is exactly where it matters most.</p>
+        </div>
+      </section>
+
+      <!-- ===================== 11 GLOSSARY ===================== -->
+      <section id="glossary">
+        <div class="sec-head"><span class="sec-num">11</span><h2>Word list — every term, in plain English</h2></div>
+        <p class="lead">If a word tripped you up, it's here, explained simply. Grouped so related words sit together.</p>
+
+        <h4>The chip and its storage</h4>
+        <div style="max-width:74ch">
+          <p style="margin:0 0 11px"><span class="term">GPU</span> &nbsp;— a chip with thousands of simple workers that all work at the same time. AI runs on these.</p>
+          <p style="margin:0 0 11px"><span class="term">CPU</span> &nbsp;— your computer's main chip: a few clever workers, good at careful one-step-at-a-time tasks.</p>
+          <p style="margin:0 0 11px"><span class="term">SM</span> &nbsp;— one of the ~148 small "teams" inside the GPU. Each has its own workers, tools, and small storage.</p>
+          <p style="margin:0 0 11px"><span class="term">HBM (global memory)</span> &nbsp;— the big, slow storage (~180 GB). Like a far-off warehouse. The thing FlashAttention tries hard not to visit.</p>
+          <p style="margin:0 0 11px"><span class="term">L2 cache</span> &nbsp;— a medium, shared storage that keeps recently used data handy. Keeping data here instead of re-fetching it is why §8 reorders work carefully.</p>
+          <p style="margin:0 0 11px"><span class="term">SMEM (shared memory)</span> &nbsp;— a small, fast scratchpad each team gets. Like your desk. It did <em>not</em> get faster on the new chip, so it's often the slow part.</p>
+          <p style="margin:0 0 11px"><span class="term">TMEM (tensor memory)</span> &nbsp;— brand new on this chip: a spot where the math engine parks its answers so it doesn't clog the workers' hands. Key to running things at the same time.</p>
+          <p style="margin:0 0 11px"><span class="term">DSMEM</span> &nbsp;— a shortcut that lets two neighbor teams peek at each other's desk directly. Used in the two-core swap (§7).</p>
+          <p style="margin:0 0 11px"><span class="term">registers</span> &nbsp;— the workers' "hands": the fastest storage, but each worker can hold only a tiny bit.</p>
+        </div>
+
+        <h4>The math parts</h4>
+        <div style="max-width:74ch">
+          <p style="margin:0 0 11px"><span class="term">tensor core</span> &nbsp;— the hardware that does matrix math very fast. The "engine." It got twice as fast on the new chip.</p>
+          <p style="margin:0 0 11px"><span class="term">MMA (also UMMA)</span> &nbsp;— the command that tells the tensor core to do one block of matrix math. Just read it as "do some matrix math." UMMA is the new chip's name for it.</p>
+          <p style="margin:0 0 11px"><span class="term">MUFU (the exp unit)</span> &nbsp;— a small unit that does tricky functions like <code>exp()</code>. It did <em>not</em> get faster, so it became a traffic jam.</p>
+          <p style="margin:0 0 11px"><span class="term">FMA</span> &nbsp;— a basic "multiply, then add" step; the everyday math operation. The fake-exp formula is built from a few of these.</p>
+          <p style="margin:0 0 11px"><span class="term">ALU</span> &nbsp;— the unit that does simple whole-number and bit operations. It does the near-free "shift the bits" part of faking exp.</p>
+          <p style="margin:0 0 11px"><span class="term">BF16 / FP8 / FP32</span> &nbsp;— number formats with different roughness. BF16 is a bit rough (rounds a lot), which is why a cheap, short exp formula is accurate enough.</p>
+        </div>
+
+        <h4>The worker groups</h4>
+        <div style="max-width:74ch">
+          <p style="margin:0 0 11px"><span class="term">thread</span> &nbsp;— one worker, running one stream of steps.</p>
+          <p style="margin:0 0 11px"><span class="term">warp</span> &nbsp;— a group of 32 workers that move in lockstep (all do the same step together). If they disagree on a choice, the group slows down doing both paths.</p>
+          <p style="margin:0 0 11px"><span class="term">warpgroup</span> &nbsp;— 128 workers (four warps). FlashAttention-4 gives each warpgroup its own fixed job.</p>
+          <p style="margin:0 0 11px"><span class="term">CTA (block)</span> &nbsp;— one team's block of workers running together on one SM, sharing its desk.</p>
+          <p style="margin:0 0 11px"><span class="term">cluster</span> &nbsp;— a few teams placed close enough to share data and "team up."</p>
+          <p style="margin:0 0 11px"><span class="term">grid</span> &nbsp;— all the workers launched for the whole job.</p>
+          <p style="margin:0 0 11px"><span class="term">2-CTA mode</span> &nbsp;— two teams doing one big matrix multiply together, each holding half the data. Cuts data movement; the star of §7.</p>
+          <p style="margin:0 0 11px"><span class="term">warp specialization</span> &nbsp;— giving different worker-groups different fixed jobs so they run side by side (the restaurant-kitchen idea).</p>
+          <p style="margin:0 0 11px"><span class="term">TMA</span> &nbsp;— hardware that moves big blocks of data between the warehouse and the desk on its own, so workers don't have to babysit the copy.</p>
+        </div>
+
+        <h4>The attention idea</h4>
+        <div style="max-width:74ch">
+          <p style="margin:0 0 11px"><span class="term">attention</span> &nbsp;— the AI step where every word looks at every other word to gather context.</p>
+          <p style="margin:0 0 11px"><span class="term">Query / Key / Value</span> &nbsp;— the three lists each word becomes: what it's looking for, what it offers, and the info it carries.</p>
+          <p style="margin:0 0 11px"><span class="term">softmax</span> &nbsp;— the step that turns raw match-scores into weights that add up to 1 (big scores → big weights).</p>
+          <p style="margin:0 0 11px"><span class="term">exp()</span> &nbsp;— "e to the power of x," the math inside softmax that the slow unit computes.</p>
+          <p style="margin:0 0 11px"><span class="term">online softmax</span> &nbsp;— doing softmax a little at a time over tiles, keeping a few running numbers. Lets FlashAttention avoid storing the giant grid.</p>
+          <p style="margin:0 0 11px"><span class="term">rescaling</span> &nbsp;— the clean-up multiply that adjusts the running answer when a bigger maximum appears. §6 skips most of it.</p>
+          <p style="margin:0 0 11px"><span class="term">tiling</span> &nbsp;— chopping the work into small desk-sized blocks. The founding FlashAttention idea.</p>
+          <p style="margin:0 0 11px"><span class="term">forward / backward pass</span> &nbsp;— reading (2 matrix multiplies) versus training-in-reverse (5 multiplies).</p>
+          <p style="margin:0 0 11px"><span class="term">dQ</span> &nbsp;— the training nudge for the Query list. It must be summed across many cores, which is the slow, tricky bit of §7.</p>
+          <p style="margin:0 0 11px"><span class="term">atomic add</span> &nbsp;— a safe-but-slow way for many cores to add into the same spot. Slow, and the order isn't fixed — so results aren't exactly repeatable.</p>
+          <p style="margin:0 0 11px"><span class="term">causal masking</span> &nbsp;— the rule that each word may only look at earlier words. Makes the work lopsided (triangular).</p>
+          <p style="margin:0 0 11px"><span class="term">varlen</span> &nbsp;— a batch mixing texts of different lengths; another source of lopsided work.</p>
+          <p style="margin:0 0 11px"><span class="term">MHA / MQA / GQA</span> &nbsp;— versions of attention that differ in how many queries share each key/value. They affect how work is shared and how data is reused.</p>
+          <p style="margin:0 0 11px"><span class="term">LPT / SPT</span> &nbsp;— work-ordering rules. LPT = do the biggest jobs first (to balance the load). SPT = an order for the repeatable mode so no core gets stuck waiting.</p>
+          <p style="margin:0 0 11px"><span class="term">roofline</span> &nbsp;— the simple "how long does each part take, and do they overlap?" estimate used to find the slow part.</p>
+        </div>
+
+        <h4>The software</h4>
+        <div style="max-width:74ch">
+          <p style="margin:0 0 11px"><span class="term">CuTe-DSL</span> &nbsp;— the special Python the whole thing is written in. Just as fast as C++, but far easier to read and change.</p>
+          <p style="margin:0 0 11px"><span class="term">PTX / SASS</span> &nbsp;— PTX is in-between code; SASS is the chip's real instructions. Python becomes PTX, then SASS.</p>
+          <p style="margin:0 0 11px"><span class="term">compile / build</span> &nbsp;— turning written code into chip instructions.</p>
+          <p style="margin:0 0 11px"><span class="term">just-in-time (JIT)</span> &nbsp;— building only the version you need, right when you need it. The reason builds are 20–30× faster.</p>
+          <p style="margin:0 0 11px"><span class="term">TFLOPs/s</span> &nbsp;— trillions of math operations per second; the speed score. Higher means faster.</p>
+        </div>
+      </section>
+
+      <!-- ===================== 12 STUDY ===================== -->
+      <section id="study">
+        <div class="sec-head"><span class="sec-num">12</span><h2>How to learn more</h2></div>
+        <p class="lead">You found this through a "how to get a job at a top AI lab" post, so here's the honest truth: what those teams want isn't someone who memorized these tricks. It's someone who understands <em>why</em> each choice was made. The good news — you now have the foundation to build that. Here's a path.</p>
+
+        <h3>Learn it in this order</h3>
+        <p>Each step builds on the one before. If a section earlier felt shaky, that's the place to go back to first.</p>
+        <ol>
+          <li><strong>The "find the slow part" habit, first.</strong> Before any chip details, get comfortable asking of any task: "which part is the slowest, and is it the math, the data, or something else?" Try rebuilding Table 1 and Table 3 with pen and paper. Once you can explain <em>why</em> the forward pass is stuck on exp and the backward pass is stuck on data movement, the rest of the paper stops feeling random and starts feeling obvious.</li>
+          <li><strong>Online softmax.</strong> Write it yourself in plain Python: feed in a long list of scores a block at a time, keep the running maximum and running total, and check your answer matches doing it all at once. This one idea is the beating heart of <em>every</em> version of FlashAttention.</li>
+          <li><strong>The overlap idea.</strong> Really sit with the difference between adding up the times (when steps take turns) and taking just the slowest (when they run together). Every pipeline in §6 and §7 is just turning the first into the second.</li>
+          <li><strong>The chip-specific tricks, last.</strong> Only now dig into TMEM, two-core mode, and warp specialization. They'll click easily, because you'll meet them as <em>answers</em> to slow parts you already understand — not as a pile of strange names.</li>
+        </ol>
+
+        <h3>What someone might ask you</h3>
+        <p>Good questions test your <em>reasoning</em>, not your memory. Practice thinking out loud about things like: "If the next chip makes the exp unit twice as fast, would you still bother faking exp on the side?" or "Why does the backward pass need two matrix multiplies running at once — and where does the second one come from?" or "What would break if you just copied an old-chip attention program onto the new chip?" If you can reason these out using the ideas in this guide, you understand the paper.</p>
+
+        <h3>Where to read next (in order)</h3>
+        <p>These notes are a ladder to get you started; the real learning is in the original material. A sensible order: read the first <strong>FlashAttention</strong> paper and <strong>FlashAttention-2</strong> (the tiling and work-sharing foundations), then <strong>FlashAttention-3</strong> (overlap and warp specialization on the previous chip), then come back and re-read the FlashAttention-4 paper — it'll read very differently the second time. For the chip side, NVIDIA's CUDA programming guide and its Blackwell overview fill in the hardware. Best of all, the FlashAttention-4 code is public, at <span class="mono">github.com/Dao-AILab/flash-attention</span> (look in the <span class="mono">flash_attn/cute</span> folder). You can read the real code and match it to the sections here. Then change something small and see what breaks — that's the step where the understanding truly becomes yours.</p>
+
+        <div class="box key">
+          <p class="label"><span class="dot" style="background:var(--rust)"></span>The one thing to take away</p>
+          <p style="margin-bottom:0">FlashAttention-4 is really one disciplined idea, applied over and over: <strong>find the part that's actually slowing you down, then redesign everything around keeping that part busy.</strong> The math engine got fast; the plumbing didn't; so the whole project is re-plumbing. Carry that one question — "what's the real slow part here?" — into the next paper you read, and you'll get far more from it than any list of tricks could give you.</p>
+        </div>
+      </section>
+
+    </main>
+  </div><!-- /.layout -->
+
+  <footer class="footer">
+    <p><b>FlashAttention-4 — A Plain-English Guide for Beginners.</b> Built from the paper by Zadouri, Hoehnerbach, Shah, Liu, Thakkar &amp; Dao (arXiv:2603.05451v1, 2026). The pictures are original drawings made to explain the ideas; every number, table, and formula is taken from the paper itself.</p>
+    <p style="margin-bottom:0">Written for someone starting from zero. The best next step is the original papers and the open-source code — read them, change something, and see what happens.</p>
+  </footer>
+
+</div><!-- /.page -->
+</body>
+</html>
